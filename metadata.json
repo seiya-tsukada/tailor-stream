@@ -1,0 +1,6 @@
+{
+  "name": "AlertPulse - Google Alerts Reader",
+  "description": "Google Alertの情報を快適に閲覧・収集・管理できるモバイルライクなスマートRSSリーダー",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
