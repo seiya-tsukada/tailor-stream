@@ -3,10 +3,15 @@ import {
   AlertItem,
   AlertKeyword,
   FeedFilterType,
+  FeedStats,
   IAlertRepository,
+  KeywordCount,
   NavTabType,
 } from '../types';
 import { defaultAlertRepository } from '../services/storage';
+import { fetchFeedBatch } from '../services/feedApi';
+import { KEYWORD_AUTO_COLORS } from '../config/keywords';
+import { MESSAGES } from '../config/messages';
 
 interface UseAlertStateOptions {
   repository?: IAlertRepository;
@@ -20,7 +25,7 @@ export function useAlertState(options: UseAlertStateOptions = {}) {
   const [keywords, setKeywords] = useState<AlertKeyword[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
-  
+
   // フィードアイテム＆通信状態
   const [items, setItems] = useState<AlertItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -66,7 +71,7 @@ export function useAlertState(options: UseAlertStateOptions = {}) {
           await fetchFeeds(state.keywords, new Set(state.readIds), new Set(state.favoriteIds));
         }
       } catch (err: any) {
-        if (isMounted) setError(err.message || '初期化に失敗しました');
+        if (isMounted) setError(err.message || MESSAGES.INIT_FAILED);
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -97,39 +102,23 @@ export function useAlertState(options: UseAlertStateOptions = {}) {
       setError(null);
 
       try {
-        const response = await fetch('/api/feed/batch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keywords: activeKw }),
-        });
+        const data = await fetchFeedBatch(activeKw);
 
-        if (!response.ok) {
-          throw new Error(`サーバーエラー (${response.status})`);
-        }
+        // 既読・お気に入り状態をマージ
+        const enriched: AlertItem[] = data.items.map((item) => ({
+          ...item,
+          isRead: currentReads.has(item.id),
+          isFavorite: currentFavs.has(item.id),
+        }));
 
-        const json = await response.json();
-        if (json.success && json.data?.items) {
-          const rawItems = json.data.items as AlertItem[];
+        setItems(enriched);
+        setLastSyncTime(new Date().toISOString());
 
-          // 既読・お気に入り状態をマージ
-          const enriched: AlertItem[] = rawItems.map((item) => ({
-            ...item,
-            isRead: currentReads.has(item.id),
-            isFavorite: currentFavs.has(item.id),
-          }));
-
-          setItems(enriched);
-          const syncNow = new Date().toISOString();
-          setLastSyncTime(syncNow);
-
-          // リポジトリへキャッシュ保存
-          await repository.cacheFeedItems(enriched);
-        } else {
-          throw new Error(json.error || 'フィード取得に失敗しました');
-        }
+        // リポジトリへキャッシュ保存
+        await repository.cacheFeedItems(enriched);
       } catch (err: any) {
         console.error('[useAlertState] Feed fetch failed:', err);
-        setError(err.message || 'フィードの同期に失敗しました');
+        setError(err.message || MESSAGES.FEED_SYNC_FAILED);
       } finally {
         setIsRefreshing(false);
       }
@@ -215,17 +204,8 @@ export function useAlertState(options: UseAlertStateOptions = {}) {
       const trimmed = keywordStr.trim();
       if (!trimmed) return;
 
-      const defaultColors = [
-        '#3B82F6', // Blue
-        '#10B981', // Emerald
-        '#8B5CF6', // Purple
-        '#F59E0B', // Amber
-        '#EC4899', // Pink
-        '#06B6D4', // Cyan
-        '#F97316', // Orange
-      ];
       const assignedColor =
-        color || defaultColors[keywords.length % defaultColors.length];
+        color || KEYWORD_AUTO_COLORS[keywords.length % KEYWORD_AUTO_COLORS.length];
 
       const newKeyword: AlertKeyword = {
         id: `kw-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -317,12 +297,12 @@ export function useAlertState(options: UseAlertStateOptions = {}) {
   }, [items, activeTab, filterType, selectedKeywordId, searchQuery]);
 
   // 統計情報
-  const stats = useMemo(() => {
+  const stats = useMemo<FeedStats>(() => {
     const total = items.length;
     const unread = items.filter((i) => !i.isRead).length;
     const favorites = items.filter((i) => i.isFavorite).length;
 
-    const keywordCounts: Record<string, { total: number; unread: number }> = {};
+    const keywordCounts: Record<string, KeywordCount> = {};
     keywords.forEach((kw) => {
       const kwItems = items.filter((i) => i.keywordId === kw.id);
       keywordCounts[kw.id] = {

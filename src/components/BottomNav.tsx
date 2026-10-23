@@ -1,6 +1,7 @@
 import React from 'react';
 import { Newspaper, Star, Sliders, BarChart3 } from 'lucide-react';
 import { NavTabType } from '../types';
+import { LIMITS } from '../config/constants';
 
 interface BottomNavProps {
   activeTab: NavTabType;
@@ -17,30 +18,36 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   favoriteCount,
   keywordCount,
 }) => {
-  const navItems = [
+  const navItems: Array<{
+    id: NavTabType;
+    label: string;
+    icon: typeof Newspaper;
+    badge: number | null;
+    badgeColor: string;
+  }> = [
     {
-      id: 'feed' as NavTabType,
+      id: 'feed',
       label: 'フィード',
       icon: Newspaper,
       badge: unreadCount > 0 ? unreadCount : null,
       badgeColor: 'bg-blue-500',
     },
     {
-      id: 'favorites' as NavTabType,
+      id: 'favorites',
       label: '保存済み',
       icon: Star,
       badge: favoriteCount > 0 ? favoriteCount : null,
       badgeColor: 'bg-amber-500',
     },
     {
-      id: 'keywords' as NavTabType,
+      id: 'keywords',
       label: 'キーワード',
       icon: Sliders,
       badge: null,
       badgeColor: 'bg-zinc-600',
     },
     {
-      id: 'stats' as NavTabType,
+      id: 'stats',
       label: '分析・設定',
       icon: BarChart3,
       badge: null,
@@ -80,7 +87,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                   <span
                     className={`absolute -top-1 -right-2.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center leading-none ${item.badgeColor}`}
                   >
-                    {item.badge > 99 ? '99+' : item.badge}
+                    {item.badge > LIMITS.BADGE_MAX ? `${LIMITS.BADGE_MAX}+` : item.badge}
                   </span>
                 )}
               </div>

@@ -7,12 +7,13 @@ import {
   Share2,
   Copy,
   Check,
-  Globe,
   Calendar,
   Layers,
 } from 'lucide-react';
 import { AlertItem } from '../types';
-import { formatRelativeTime } from '../utils/alertUtils';
+import { formatRelativeTime, shareArticle } from '../utils/alertUtils';
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
+import { Favicon } from './Favicon';
 
 interface ArticleModalProps {
   item: AlertItem | null;
@@ -27,31 +28,13 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
   onToggleFavorite,
   onToggleRead,
 }) => {
-  const [copied, setCopied] = React.useState(false);
+  const { copied, copy } = useCopyToClipboard();
 
   if (!item) return null;
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(item.originalUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const handleCopyLink = () => copy(item.originalUrl);
 
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: item.cleanTitle,
-          text: item.cleanSummary,
-          url: item.originalUrl,
-        });
-      } catch {
-        // Share cancelled
-      }
-    } else {
-      handleCopyLink();
-    }
-  };
+  const handleShare = () => shareArticle(item, handleCopyLink);
 
   return (
     <AnimatePresence>
@@ -79,21 +62,13 @@ export const ArticleModal: React.FC<ArticleModalProps> = ({
           {/* ヘッダー */}
           <div className="flex items-center justify-between gap-2 pb-3 border-b border-zinc-800 mb-4">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-zinc-800 flex items-center justify-center overflow-hidden border border-zinc-700">
-                {item.faviconUrl ? (
-                  <img
-                    src={item.faviconUrl}
-                    alt={item.domain}
-                    className="w-4 h-4 object-contain"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
-                  />
-                ) : (
-                  <Globe className="w-3.5 h-3.5 text-zinc-400" />
-                )}
-              </div>
+              <Favicon
+                src={item.faviconUrl}
+                alt={item.domain}
+                containerClassName="w-6 h-6 rounded-lg bg-zinc-800 flex items-center justify-center overflow-hidden border border-zinc-700"
+                imageClassName="w-4 h-4 object-contain"
+                fallbackIconClassName="w-3.5 h-3.5 text-zinc-400"
+              />
               <span className="text-sm font-semibold text-zinc-200">
                 {item.domain}
               </span>
