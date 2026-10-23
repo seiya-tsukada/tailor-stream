@@ -7,10 +7,11 @@ import {
   Circle,
   Share2,
   BookOpen,
-  Globe,
 } from 'lucide-react';
 import { AlertItem } from '../types';
-import { formatRelativeTime } from '../utils/alertUtils';
+import { DEFAULT_KEYWORD_COLOR } from '../config/keywords';
+import { formatRelativeTime, shareArticle } from '../utils/alertUtils';
+import { Favicon } from './Favicon';
 
 interface AlertCardProps {
   item: AlertItem;
@@ -22,26 +23,14 @@ interface AlertCardProps {
 
 export const AlertCard: React.FC<AlertCardProps> = ({
   item,
-  keywordColor = '#3B82F6',
+  keywordColor = DEFAULT_KEYWORD_COLOR,
   onToggleRead,
   onToggleFavorite,
   onOpenArticle,
 }) => {
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: item.cleanTitle,
-          text: item.cleanSummary,
-          url: item.originalUrl,
-        });
-      } catch {
-        // Share cancelled or failed
-      }
-    } else {
-      navigator.clipboard.writeText(item.originalUrl);
-    }
+    await shareArticle(item, () => navigator.clipboard.writeText(item.originalUrl));
   };
 
   return (
@@ -70,23 +59,14 @@ export const AlertCard: React.FC<AlertCardProps> = ({
       {/* ヘッダー情報: ドメイン / ファビコン / キーワード / 時間 */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 min-w-0">
-          {/* ファビコン */}
-          <div className="w-5 h-5 rounded-md bg-zinc-800 flex items-center justify-center overflow-hidden shrink-0 border border-zinc-700/50">
-            {item.faviconUrl ? (
-              <img
-                src={item.faviconUrl}
-                alt={item.domain}
-                className="w-3.5 h-3.5 object-contain"
-                loading="lazy"
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
-              />
-            ) : (
-              <Globe className="w-3 h-3 text-zinc-400" />
-            )}
-          </div>
+          <Favicon
+            src={item.faviconUrl}
+            alt={item.domain}
+            containerClassName="w-5 h-5 rounded-md bg-zinc-800 flex items-center justify-center overflow-hidden shrink-0 border border-zinc-700/50"
+            imageClassName="w-3.5 h-3.5 object-contain"
+            fallbackIconClassName="w-3 h-3 text-zinc-400"
+            lazy
+          />
 
           {/* ドメイン名 */}
           <span className="text-xs font-medium text-zinc-300 truncate max-w-[130px]">

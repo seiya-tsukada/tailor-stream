@@ -1,16 +1,8 @@
-export interface AlertItem {
-  id: string;
-  title: string;
-  cleanTitle: string;
-  summary: string;
-  cleanSummary: string;
-  originalUrl: string;
-  googleUrl: string;
-  publishedAt: string;
-  domain: string;
-  faviconUrl: string;
-  keywordId: string;
-  keywordName: string;
+import type { FeedItemPayload } from '../shared/api';
+
+export type { ApiResponse, FeedFetchResult } from '../shared/api';
+
+export interface AlertItem extends FeedItemPayload {
   isRead: boolean;
   isFavorite: boolean;
   readAt?: string;
@@ -29,24 +21,21 @@ export interface AlertKeyword {
   totalCount?: number;
 }
 
-export interface FeedFetchResult {
-  success: boolean;
-  keywordId: string;
-  keywordName: string;
-  items: Omit<AlertItem, 'isRead' | 'isFavorite' | 'readAt' | 'favoriteAt'>[];
-  error?: string;
-}
-
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-}
-
 export type FeedFilterType = 'all' | 'unread' | 'favorites';
 
 export type NavTabType = 'feed' | 'keywords' | 'favorites' | 'stats';
+
+export interface KeywordCount {
+  total: number;
+  unread: number;
+}
+
+export interface FeedStats {
+  total: number;
+  unread: number;
+  favorites: number;
+  keywordCounts: Record<string, KeywordCount>;
+}
 
 export interface AlertStateData {
   readIds: string[];

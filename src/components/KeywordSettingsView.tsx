@@ -10,10 +10,13 @@ import {
   Rss,
   Sparkles,
   RefreshCw,
-  Info,
 } from 'lucide-react';
 import { AlertKeyword } from '../types';
 import { createGoogleAlertsWebUrl } from '../utils/alertUtils';
+import { validateFeedUrl } from '../services/feedApi';
+import { KEYWORD_COLOR_PALETTE } from '../config/keywords';
+import { EXTERNAL_LINKS } from '../config/constants';
+import { MESSAGES } from '../config/messages';
 
 interface KeywordSettingsProps {
   keywords: AlertKeyword[];
@@ -23,17 +26,12 @@ interface KeywordSettingsProps {
   onToggleActive: (id: string) => Promise<void>;
 }
 
-const COLOR_PALETTE = [
-  { name: 'Blue', hex: '#3B82F6' },
-  { name: 'Emerald', hex: '#10B981' },
-  { name: 'Purple', hex: '#8B5CF6' },
-  { name: 'Amber', hex: '#F59E0B' },
-  { name: 'Rose', hex: '#F43F5E' },
-  { name: 'Cyan', hex: '#06B6D4' },
-  { name: 'Indigo', hex: '#6366F1' },
-];
+type FeedTestResult = {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  message?: string;
+};
 
-export const KeywordSettingsModal: React.FC<KeywordSettingsProps> = ({
+export const KeywordSettingsView: React.FC<KeywordSettingsProps> = ({
   keywords,
   onAddKeyword,
   onUpdateKeyword,
@@ -42,12 +40,9 @@ export const KeywordSettingsModal: React.FC<KeywordSettingsProps> = ({
 }) => {
   const [newKeyword, setNewKeyword] = useState('');
   const [newFeedUrl, setNewFeedUrl] = useState('');
-  const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0].hex);
+  const [selectedColor, setSelectedColor] = useState<string>(KEYWORD_COLOR_PALETTE[0].hex);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [testResult, setTestResult] = useState<{
-    status: 'idle' | 'loading' | 'success' | 'error';
-    message?: string;
-  }>({ status: 'idle' });
+  const [testResult, setTestResult] = useState<FeedTestResult>({ status: 'idle' });
   const [showGuide, setShowGuide] = useState(false);
 
   // RSS URLのバリデーションテスト
@@ -56,27 +51,22 @@ export const KeywordSettingsModal: React.FC<KeywordSettingsProps> = ({
 
     setTestResult({ status: 'loading' });
     try {
-      const res = await fetch('/api/feed/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: newFeedUrl.trim() }),
-      });
-      const data = await res.json();
-      if (data.success) {
+      const result = await validateFeedUrl(newFeedUrl.trim());
+      if (result.success && result.data) {
         setTestResult({
           status: 'success',
-          message: `接続成功: "${data.data.title}" (${data.data.itemCount}件の記事を確認)`,
+          message: MESSAGES.FEED_TEST_SUCCESS(result.data.title, result.data.itemCount),
         });
       } else {
         setTestResult({
           status: 'error',
-          message: data.error || 'フィードの取得に失敗しました',
+          message: result.error || MESSAGES.FEED_TEST_FAILED,
         });
       }
-    } catch (e: any) {
+    } catch {
       setTestResult({
         status: 'error',
-        message: 'ネットワーク接続エラーが発生しました',
+        message: MESSAGES.NETWORK_ERROR,
       });
     }
   };
@@ -134,7 +124,7 @@ export const KeywordSettingsModal: React.FC<KeywordSettingsProps> = ({
             <ol className="list-decimal list-inside space-y-1 text-zinc-300">
               <li>
                 <a
-                  href="https://www.google.co.jp/alerts"
+                  href={EXTERNAL_LINKS.GOOGLE_ALERTS}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-400 underline inline-flex items-center gap-0.5"
@@ -230,7 +220,7 @@ export const KeywordSettingsModal: React.FC<KeywordSettingsProps> = ({
               setNewFeedUrl(e.target.value);
               setTestResult({ status: 'idle' });
             }}
-            placeholder="https://www.google.co.jp/alerts/feeds/..."
+            placeholder={EXTERNAL_LINKS.GOOGLE_ALERTS_FEED_PLACEHOLDER}
             className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 font-mono"
           />
 
@@ -255,7 +245,7 @@ export const KeywordSettingsModal: React.FC<KeywordSettingsProps> = ({
             タグカラー
           </label>
           <div className="flex items-center gap-2">
-            {COLOR_PALETTE.map((color) => (
+            {KEYWORD_COLOR_PALETTE.map((color) => (
               <button
                 key={color.hex}
                 type="button"

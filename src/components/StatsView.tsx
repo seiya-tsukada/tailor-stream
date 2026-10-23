@@ -1,63 +1,18 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   BarChart3,
   Database,
   Download,
-  Upload,
   Check,
   Layers,
-  BookOpen,
-  Star,
-  CheckCircle,
   Copy,
-  ExternalLink,
 } from 'lucide-react';
-import { AlertItem, AlertKeyword } from '../types';
+import { AlertItem, AlertKeyword, FeedStats } from '../types';
+import { EXPORT_CONFIG } from '../config/constants';
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 
-interface StatsViewProps {
-  items: AlertItem[];
-  keywords: AlertKeyword[];
-  stats: {
-    total: number;
-    unread: number;
-    favorites: number;
-    keywordCounts: Record<string, { total: number; unread: number }>;
-  };
-  lastSyncTime: string | null;
-}
-
-export const StatsView: React.FC<StatsViewProps> = ({
-  items,
-  keywords,
-  stats,
-  lastSyncTime,
-}) => {
-  const [copiedCode, setCopiedCode] = useState(false);
-
-  const readCount = stats.total - stats.unread;
-  const readPercentage =
-    stats.total > 0 ? Math.round((readCount / stats.total) * 100) : 0;
-
-  // JSON エクスポート
-  const handleExportJson = () => {
-    const data = {
-      keywords,
-      items,
-      exportedAt: new Date().toISOString(),
-      version: '1.0.0',
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `alertpulse_backup_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const sampleSupabaseCode = `// src/services/storage.ts
+// Cloud DB 移行ガイドに表示するサンプルコード
+const SUPABASE_SAMPLE_CODE = `// src/services/storage.ts
 import { createClient } from '@supabase/supabase-js';
 
 // 1. Supabase用のリポジトリ実装クラスを作成
@@ -84,6 +39,47 @@ export class SupabaseAlertRepository implements IAlertRepository {
 
 // 2. この1行を差し替えるだけで、全画面がSupabase対応になります！
 export const defaultAlertRepository = new SupabaseAlertRepository();`;
+
+const percentOf = (value: number, total: number) =>
+  total > 0 ? Math.round((value / total) * 100) : 0;
+
+interface StatsViewProps {
+  items: AlertItem[];
+  keywords: AlertKeyword[];
+  stats: FeedStats;
+  lastSyncTime: string | null;
+}
+
+export const StatsView: React.FC<StatsViewProps> = ({
+  items,
+  keywords,
+  stats,
+  lastSyncTime,
+}) => {
+  const { copied: copiedCode, copy } = useCopyToClipboard();
+
+  const readCount = stats.total - stats.unread;
+  const readPercentage = percentOf(readCount, stats.total);
+
+  // JSON エクスポート
+  const handleExportJson = () => {
+    const data = {
+      keywords,
+      items,
+      exportedAt: new Date().toISOString(),
+      version: EXPORT_CONFIG.VERSION,
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${EXPORT_CONFIG.FILE_PREFIX}${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
 
   return (
     <div className="space-y-6 pb-20">
@@ -148,8 +144,7 @@ export const defaultAlertRepository = new SupabaseAlertRepository();`;
         <div className="space-y-2.5">
           {keywords.map((kw) => {
             const count = stats.keywordCounts[kw.id] || { total: 0, unread: 0 };
-            const percent =
-              stats.total > 0 ? Math.round((count.total / stats.total) * 100) : 0;
+            const percent = percentOf(count.total, stats.total);
 
             return (
               <div key={kw.id} className="space-y-1">
@@ -201,11 +196,7 @@ export const defaultAlertRepository = new SupabaseAlertRepository();`;
         <div className="relative bg-zinc-950 rounded-xl p-3 border border-zinc-800 text-[11px] font-mono text-zinc-300 overflow-x-auto">
           <button
             type="button"
-            onClick={() => {
-              navigator.clipboard.writeText(sampleSupabaseCode);
-              setCopiedCode(true);
-              setTimeout(() => setCopiedCode(false), 2000);
-            }}
+            onClick={() => copy(SUPABASE_SAMPLE_CODE)}
             className="absolute top-2.5 right-2.5 text-zinc-400 hover:text-white p-1 rounded bg-zinc-800/80 border border-zinc-700"
             title="コードをコピー"
           >
@@ -215,7 +206,7 @@ export const defaultAlertRepository = new SupabaseAlertRepository();`;
               <Copy className="w-3.5 h-3.5" />
             )}
           </button>
-          <pre>{sampleSupabaseCode}</pre>
+          <pre>{SUPABASE_SAMPLE_CODE}</pre>
         </div>
       </div>
 

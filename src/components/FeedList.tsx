@@ -1,15 +1,39 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
 import {
   Inbox,
-  Sparkles,
   RefreshCw,
   Sliders,
   CheckCircle,
   Star,
 } from 'lucide-react';
 import { AlertItem, AlertKeyword, FeedFilterType, NavTabType } from '../types';
+import { DEFAULT_KEYWORD_COLOR } from '../config/keywords';
 import { AlertCard } from './AlertCard';
+
+// 記事が0件のときの表示内容
+const EMPTY_STATES = {
+  favorites: {
+    icon: <Star className="w-7 h-7 text-amber-400/80" />,
+    title: '保存された記事はありません',
+    description:
+      '記事カードの星マークアイコンをタップすると、後から読み返せるようにここにストックされます。',
+  },
+  unread: {
+    icon: <CheckCircle className="w-7 h-7 text-blue-400/80" />,
+    title: '未読の記事はありません！',
+    description:
+      'すべての記事を読み終えました。最新のアラートを受信するには更新ボタンを押してください。',
+  },
+  all: {
+    icon: <Inbox className="w-7 h-7 text-zinc-500" />,
+    title: '表示できるアラート記事がありません',
+    description:
+      'キーワード設定からGoogle Alert RSSフィードを追加するか、更新ボタンを押して最新情報を同期してください。',
+  },
+};
+
+const SKELETON_COUNT = 4;
 
 interface FeedListProps {
   items: AlertItem[];
@@ -49,7 +73,7 @@ export const FeedList: React.FC<FeedListProps> = ({
   if (isLoading && items.length === 0) {
     return (
       <div className="space-y-3 p-4">
-        {[1, 2, 3, 4].map((n) => (
+        {Array.from({ length: SKELETON_COUNT }, (_, i) => i + 1).map((n) => (
           <div
             key={n}
             className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 animate-pulse space-y-2.5"
@@ -69,32 +93,25 @@ export const FeedList: React.FC<FeedListProps> = ({
 
   // 記事が0件の場合の空ステート
   if (items.length === 0) {
+    const emptyState =
+      activeTab === 'favorites' || filterType === 'favorites'
+        ? EMPTY_STATES.favorites
+        : filterType === 'unread'
+        ? EMPTY_STATES.unread
+        : EMPTY_STATES.all;
+
     return (
       <div className="flex flex-col items-center justify-center text-center px-4 py-16">
         <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4 text-zinc-400">
-          {activeTab === 'favorites' || filterType === 'favorites' ? (
-            <Star className="w-7 h-7 text-amber-400/80" />
-          ) : filterType === 'unread' ? (
-            <CheckCircle className="w-7 h-7 text-blue-400/80" />
-          ) : (
-            <Inbox className="w-7 h-7 text-zinc-500" />
-          )}
+          {emptyState.icon}
         </div>
 
         <h3 className="text-base font-bold text-zinc-100 mb-1">
-          {activeTab === 'favorites' || filterType === 'favorites'
-            ? '保存された記事はありません'
-            : filterType === 'unread'
-            ? '未読の記事はありません！'
-            : '表示できるアラート記事がありません'}
+          {emptyState.title}
         </h3>
 
         <p className="text-xs text-zinc-400 max-w-xs mb-6 leading-relaxed">
-          {activeTab === 'favorites' || filterType === 'favorites'
-            ? '記事カードの星マークアイコンをタップすると、後から読み返せるようにここにストックされます。'
-            : filterType === 'unread'
-            ? 'すべての記事を読み終えました。最新のアラートを受信するには更新ボタンを押してください。'
-            : 'キーワード設定からGoogle Alert RSSフィードを追加するか、更新ボタンを押して最新情報を同期してください。'}
+          {emptyState.description}
         </p>
 
         <div className="flex items-center gap-2">
@@ -137,7 +154,7 @@ export const FeedList: React.FC<FeedListProps> = ({
           <AlertCard
             key={item.id}
             item={item}
-            keywordColor={keywordColorMap.get(item.keywordId) || '#3B82F6'}
+            keywordColor={keywordColorMap.get(item.keywordId) || DEFAULT_KEYWORD_COLOR}
             onToggleRead={onToggleRead}
             onToggleFavorite={onToggleFavorite}
             onOpenArticle={onOpenArticle}

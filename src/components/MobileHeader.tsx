@@ -8,6 +8,30 @@ import {
   Filter,
 } from 'lucide-react';
 import { AlertKeyword, FeedFilterType } from '../types';
+import { APP_INFO } from '../config/constants';
+
+// フィルタサブバーのタブ定義
+const FILTER_TABS: Array<{
+  id: FeedFilterType;
+  label: (unreadCount: number) => string;
+  activeClassName: string;
+}> = [
+  {
+    id: 'all',
+    label: () => '全件',
+    activeClassName: 'bg-zinc-800 text-zinc-100 font-semibold',
+  },
+  {
+    id: 'unread',
+    label: (unreadCount) => `未読のみ (${unreadCount})`,
+    activeClassName: 'bg-blue-500/20 text-blue-300 font-semibold',
+  },
+  {
+    id: 'favorites',
+    label: () => 'お気に入り',
+    activeClassName: 'bg-amber-500/20 text-amber-300 font-semibold',
+  },
+];
 
 interface MobileHeaderProps {
   keywords: AlertKeyword[];
@@ -51,7 +75,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold text-white tracking-tight leading-none">
-                AlertPulse
+                {APP_INFO.NAME}
               </h1>
               {unreadCount > 0 && (
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500 text-white leading-none">
@@ -60,7 +84,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
               )}
             </div>
             <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
-              Google Alerts Hub
+              {APP_INFO.TAGLINE}
             </p>
           </div>
         </div>
@@ -187,42 +211,19 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       <div className="flex items-center justify-between pt-2 mt-1 border-t border-zinc-900 text-xs">
         <div className="flex items-center gap-1">
           <Filter className="w-3 h-3 text-zinc-500 mr-1" />
-          <button
-            id="filter-tab-all"
-            type="button"
-            onClick={() => onSelectFilterType('all')}
-            className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
-              filterType === 'all'
-                ? 'bg-zinc-800 text-zinc-100 font-semibold'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            全件
-          </button>
-          <button
-            id="filter-tab-unread"
-            type="button"
-            onClick={() => onSelectFilterType('unread')}
-            className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
-              filterType === 'unread'
-                ? 'bg-blue-500/20 text-blue-300 font-semibold'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            未読のみ ({unreadCount})
-          </button>
-          <button
-            id="filter-tab-favorites"
-            type="button"
-            onClick={() => onSelectFilterType('favorites')}
-            className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
-              filterType === 'favorites'
-                ? 'bg-amber-500/20 text-amber-300 font-semibold'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            お気に入り
-          </button>
+          {FILTER_TABS.map((tab) => (
+            <button
+              id={`filter-tab-${tab.id}`}
+              key={tab.id}
+              type="button"
+              onClick={() => onSelectFilterType(tab.id)}
+              className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
+                filterType === tab.id ? tab.activeClassName : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              {tab.label(unreadCount)}
+            </button>
+          ))}
         </div>
 
         {/* 選択中のキーワード解除リンク */}
