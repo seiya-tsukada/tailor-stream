@@ -1,6 +1,8 @@
 import Parser from 'rss-parser';
 import type { FeedFetchResult, FeedItemPayload, FeedValidateResponseData } from '../../shared/api';
 import { FEED_DEFAULTS, RSS_CONFIG } from '../config';
+import { getErrorMessage } from '../../shared/errors';
+import { createArticleId } from './articleId';
 import { extractDomain, extractOriginalUrl, getFaviconUrl, sanitizeHtml } from './parseUtils';
 import { generateSampleAlertItems } from './sampleItems';
 
@@ -21,10 +23,9 @@ const parser = new Parser({
 
 type RssItem = Parser.Item & { description?: string };
 
-// 安定したユニークID生成
-function createItemId(keywordId: string, seed: string): string {
-  const hash = Buffer.from(seed).toString('base64').substring(0, FEED_DEFAULTS.ITEM_ID_HASH_LENGTH);
-  return `item-${keywordId}-${hash}`;
+// 安定したユニークID生成（同じ記事が複数キーワードに出ても重複しないようキーワードIDを前置する）
+export function createItemId(keywordId: string, seed: string): string {
+  return `item-${keywordId}-${createArticleId(seed)}`;
 }
 
 function toFeedItem(item: RssItem, index: number, keyword: string, keywordId: string): FeedItemPayload {
@@ -66,8 +67,8 @@ export async function fetchAndProcessFeed(
       if (items.length > 0) {
         return { success: true, keywordId, keywordName: keyword, items };
       }
-    } catch (err: any) {
-      console.warn(`[FeedFetch Warning] Failed to parse feed for ${keyword} (${feedUrl}):`, err.message);
+    } catch (err: unknown) {
+      console.warn(`[FeedFetch Warning] Failed to parse feed for ${keyword} (${feedUrl}):`, getErrorMessage(err, ''));
       // 外部取得に失敗した場合でも、ユーザーが操作を続けられるようにフォールバックデータを返す
     }
   }

@@ -1,5 +1,6 @@
 import { Request, Response, Router } from 'express';
 import { API_ROUTES, FeedItemPayload, FeedKeywordPayload } from '../../shared/api';
+import { getErrorMessage } from '../../shared/errors';
 import { FEED_DEFAULTS, SERVER_MESSAGES } from '../config';
 import { fetchAndProcessFeed, validateFeed } from '../feed/feedService';
 
@@ -17,10 +18,10 @@ feedRouter.get(API_ROUTES.FEED, async (req: Request, res: Response) => {
 
     const result = await fetchAndProcessFeed(url, keyword, keywordId);
     res.json({ success: true, data: result });
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(500).json({
       success: false,
-      error: error.message || SERVER_MESSAGES.FEED_FETCH_FAILED,
+      error: getErrorMessage(error, SERVER_MESSAGES.FEED_FETCH_FAILED),
     });
   }
 });
@@ -49,10 +50,10 @@ feedRouter.post(API_ROUTES.FEED_BATCH, async (req: Request, res: Response) => {
       success: true,
       data: { results, items: allItems, totalCount: allItems.length },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(500).json({
       success: false,
-      error: error.message || SERVER_MESSAGES.BATCH_FETCH_FAILED,
+      error: getErrorMessage(error, SERVER_MESSAGES.BATCH_FETCH_FAILED),
     });
   }
 });
@@ -67,10 +68,10 @@ feedRouter.post(API_ROUTES.FEED_VALIDATE, async (req: Request, res: Response) =>
 
     const data = await validateFeed(url);
     res.json({ success: true, data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(400).json({
       success: false,
-      error: `${SERVER_MESSAGES.FEED_PARSE_FAILED}: ${error.message || SERVER_MESSAGES.INVALID_URL}`,
+      error: `${SERVER_MESSAGES.FEED_PARSE_FAILED}: ${getErrorMessage(error, SERVER_MESSAGES.INVALID_URL)}`,
     });
   }
 });

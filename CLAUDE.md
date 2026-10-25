@@ -23,7 +23,7 @@ tailor-stream は、ユーザーが選んだカテゴリ（最大3つ）のニ�
 
 ## コーディング規約
 
-- `any` は使わない。外部入力や `catch` の値は `unknown` で受け、型ガードで絞り込む
+- `any` は使わない。外部入力や `catch` の値は `unknown` で受け、型ガードで絞り込む（エラーメッセージの取り出しは `shared/errors.ts` の `getErrorMessage` を使う）
 - 定数・設定値はコードに直書きせず、config に外出しする（サーバー: `server/config.ts`、クライアント: `src/config/constants.ts`）
 - UI に出す文言は `src/config/messages.ts` に集約する（サーバー側のメッセージは `server/config.ts` の `SERVER_MESSAGES`）
 - 新しいファイルは既存のディレクトリ構成（`server/` / `shared/` / `src/{components,hooks,services,config,utils}`）に従って置く
