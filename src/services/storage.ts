@@ -4,9 +4,35 @@ import { INITIAL_PRESET_KEYWORDS } from '../config/keywords';
 
 const isBrowser = () => typeof window !== 'undefined';
 
-function readJson<T>(key: string, fallback: T): T {
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
+
+// 要素は id など主要フィールドのみ確認する（全フィールドの厳密な検証はしない）
+const isKeywordArray = (value: unknown): value is AlertKeyword[] =>
+  Array.isArray(value) &&
+  value.every((item) => isRecord(item) && typeof item.id === 'string' && typeof item.keyword === 'string');
+
+const isAlertItemArray = (value: unknown): value is AlertItem[] =>
+  Array.isArray(value) && value.every((item) => isRecord(item) && typeof item.id === 'string');
+
+/**
+ * localStorage から JSON を読む。
+ * 未保存・JSON として壊れている・期待する形でない場合は、そのキーだけ fallback を返す。
+ */
+function readJson<T>(key: string, fallback: T, isValid: (value: unknown) => value is T): T {
   const raw = localStorage.getItem(key);
-  return raw ? JSON.parse(raw) : fallback;
+  if (!raw) return fallback;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (isValid(parsed)) return parsed;
+    console.warn(`[StorageRepository] Unexpected value for "${key}", using fallback.`);
+  } catch (e) {
+    console.warn(`[StorageRepository] Failed to parse "${key}", using fallback:`, e);
+  }
+  return fallback;
 }
 
 function writeJson(key: string, value: unknown): void {
@@ -31,10 +57,10 @@ export class LocalStorageAlertRepository implements IAlertRepository {
       if (!isBrowser()) return createInitialState();
 
       return {
-        keywords: readJson<AlertKeyword[]>(STORAGE_KEYS.KEYWORDS, INITIAL_PRESET_KEYWORDS),
-        readIds: readJson<string[]>(STORAGE_KEYS.READ_IDS, []),
-        favoriteIds: readJson<string[]>(STORAGE_KEYS.FAVORITE_IDS, []),
-        cachedItems: readJson<AlertItem[]>(STORAGE_KEYS.CACHED_ITEMS, []),
+        keywords: readJson(STORAGE_KEYS.KEYWORDS, INITIAL_PRESET_KEYWORDS, isKeywordArray),
+        readIds: readJson(STORAGE_KEYS.READ_IDS, [], isStringArray),
+        favoriteIds: readJson(STORAGE_KEYS.FAVORITE_IDS, [], isStringArray),
+        cachedItems: readJson(STORAGE_KEYS.CACHED_ITEMS, [], isAlertItemArray),
         lastSyncTime: localStorage.getItem(STORAGE_KEYS.LAST_SYNC) || undefined,
       };
     } catch (e) {
@@ -50,7 +76,7 @@ export class LocalStorageAlertRepository implements IAlertRepository {
 
   async markAsRead(idOrIds: string | string[], isRead: boolean): Promise<void> {
     if (!isBrowser()) return;
-    const currentIds = readJson<string[]>(STORAGE_KEYS.READ_IDS, []);
+    const currentIds = readJson(STORAGE_KEYS.READ_IDS, [], isStringArray);
     const targetIds = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
 
     let nextIds: string[];
@@ -66,7 +92,7 @@ export class LocalStorageAlertRepository implements IAlertRepository {
 
   async toggleFavorite(id: string, isFavorite: boolean): Promise<void> {
     if (!isBrowser()) return;
-    const currentIds = readJson<string[]>(STORAGE_KEYS.FAVORITE_IDS, []);
+    const currentIds = readJson(STORAGE_KEYS.FAVORITE_IDS, [], isStringArray);
 
     let nextIds = currentIds;
     if (isFavorite) {

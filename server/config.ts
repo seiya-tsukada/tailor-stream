@@ -33,8 +33,8 @@ export const FEED_DEFAULTS = {
   FEED_TITLE: 'Google Alert Feed',
   /** URL 検証時に返すプレビュー件数 */
   VALIDATE_PREVIEW_COUNT: 3,
-  /** 記事 ID に使う Base64 文字列の長さ */
-  ITEM_ID_HASH_LENGTH: 24,
+  /** 記事 ID に使う SHA-256 16進文字列の長さ */
+  ARTICLE_ID_LENGTH: 32,
 } as const;
 
 export const SERVER_MESSAGES = {

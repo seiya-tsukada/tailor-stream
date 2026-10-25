@@ -12,6 +12,7 @@ import { defaultAlertRepository } from '../services/storage';
 import { fetchFeedBatch } from '../services/feedApi';
 import { KEYWORD_AUTO_COLORS } from '../config/keywords';
 import { MESSAGES } from '../config/messages';
+import { getErrorMessage } from '../../shared/errors';
 
 interface UseAlertStateOptions {
   repository?: IAlertRepository;
@@ -70,8 +71,8 @@ export function useAlertState(options: UseAlertStateOptions = {}) {
         if (options.autoFetchOnMount !== false && state.keywords.length > 0) {
           await fetchFeeds(state.keywords, new Set(state.readIds), new Set(state.favoriteIds));
         }
-      } catch (err: any) {
-        if (isMounted) setError(err.message || MESSAGES.INIT_FAILED);
+      } catch (err: unknown) {
+        if (isMounted) setError(getErrorMessage(err, MESSAGES.INIT_FAILED));
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -116,9 +117,9 @@ export function useAlertState(options: UseAlertStateOptions = {}) {
 
         // リポジトリへキャッシュ保存
         await repository.cacheFeedItems(enriched);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[useAlertState] Feed fetch failed:', err);
-        setError(err.message || MESSAGES.FEED_SYNC_FAILED);
+        setError(getErrorMessage(err, MESSAGES.FEED_SYNC_FAILED));
       } finally {
         setIsRefreshing(false);
       }
