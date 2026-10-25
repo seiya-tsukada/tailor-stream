@@ -27,6 +27,8 @@ tailor-stream は、ユーザーが選んだカテゴリ（最大3つ）のニ�
 - 定数・設定値はコードに直書きせず、config に外出しする（サーバー: `server/config.ts`、クライアント: `src/config/constants.ts`）
 - UI に出す文言は `src/config/messages.ts` に集約する（サーバー側のメッセージは `server/config.ts` の `SERVER_MESSAGES`）
 - 新しいファイルは既存のディレクトリ構成（`server/` / `shared/` / `src/{components,hooks,services,config,utils}`）に従って置く
+- DB スキーマは `supabase/migrations/`、シードは `supabase/seed.sql`。テーブルに対応する型は `shared/domain.ts`（`*Row` がスネークケースの行、キャメルケースの型は `fromRow` / `toRow` で変換）
+- カテゴリのシードは `supabase/seed.sql` と `server/seeds/categories.ts` の2か所にあり、テストで一致を検証している。変えるときは両方を変更する
 
 ## 作業の完了条件
 
