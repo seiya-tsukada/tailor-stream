@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { MESSAGES } from '../config/messages';
 
 interface ErrorBannerProps {
   error: string | null;
@@ -20,7 +21,7 @@ export const ErrorBanner: React.FC<ErrorBannerProps> = ({ error, onRetry }) => {
         onClick={onRetry}
         className="text-[11px] underline font-semibold text-rose-200 shrink-0"
       >
-        再試行
+        {MESSAGES.RETRY}
       </button>
     </div>
   );

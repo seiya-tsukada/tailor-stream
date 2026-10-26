@@ -3,38 +3,28 @@
  */
 
 export const APP_INFO = {
-  NAME: 'AlertPulse',
-  TAGLINE: 'Google Alerts Hub',
+  NAME: 'TailorStream',
+  TAGLINE: '選んだカテゴリの「今読むべき」ニュース',
 } as const;
 
-/** localStorage のキー（変更すると既存ユーザーのデータが読めなくなるので注意） */
-export const STORAGE_KEYS = {
-  KEYWORDS: 'alertpulse_keywords_v1',
-  READ_IDS: 'alertpulse_read_ids_v1',
-  FAVORITE_IDS: 'alertpulse_favorite_ids_v1',
-  CACHED_ITEMS: 'alertpulse_cached_items_v1',
-  LAST_SYNC: 'alertpulse_last_sync_v1',
+export const API_PATHS = {
+  CATEGORIES: '/api/categories',
+  FEED: '/api/feed',
 } as const;
 
 export const LIMITS = {
-  /** localStorage にキャッシュする記事の最大件数 */
-  CACHED_ITEMS: 100,
-  /** バッジに表示する最大数（超えると "99+"） */
-  BADGE_MAX: 99,
+  /** 一度に選べるカテゴリの最大数（サーバーの FEED_MAX_CATEGORIES と合わせる） */
+  MAX_CATEGORIES: 3,
 } as const;
 
-export const UI_TIMING = {
-  TOAST_DURATION_MS: 2500,
-  COPY_FEEDBACK_MS: 2000,
+/** 選択カテゴリを保持する URL クエリ（PR 2 でユーザー設定に移すまでの一時的な置き場所） */
+export const URL_QUERY_KEYS = {
+  CATEGORIES: 'categories',
 } as const;
 
-export const EXPORT_CONFIG = {
-  VERSION: '1.0.0',
-  FILE_PREFIX: 'alertpulse_backup_',
+export const FAVICON_CONFIG = {
+  ENDPOINT: 'https://www.google.com/s2/favicons',
+  SIZE: 64,
 } as const;
 
-export const EXTERNAL_LINKS = {
-  GOOGLE_ALERTS: 'https://www.google.co.jp/alerts',
-  GOOGLE_ALERTS_CREATE: 'https://www.google.co.jp/alerts#create:q=',
-  GOOGLE_ALERTS_FEED_PLACEHOLDER: 'https://www.google.co.jp/alerts/feeds/...',
-} as const;
+export const SKELETON_COUNT = 4;

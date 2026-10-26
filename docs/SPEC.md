@@ -1,7 +1,7 @@
 # TailorStream 仕様書（公開版 MVP）
 
 > このファイルはリポジトリの `docs/SPEC.md` に置き、Claude Code の各フェーズで参照させる。
-> 未確定事項は「§9 未確定事項」にまとめてあり、そこに関わる実装は必ず差し替え可能な形（インターフェース＋モック）で作ること。
+> 未確定事項は「§9 未確定事項」にまとめてあり、そこに関わる実装は必ず差し替え可能な形（プロトコル＋モック）で作ること。
 
 ## 1. プロダクト概要
 
@@ -11,14 +11,16 @@
 
 ### 価値の線引き
 
-| 機能 | 匿名 | 無料アカウント | 有料（Pro） |
-|---|---|---|---|
-| カテゴリ選択（最大3つ） | ○（ブラウザに保持） | ○（DB に保持） | ○ |
-| 記事一覧の閲覧 | ○ | ○ | ○ |
-| 保存（6時間で自動消滅） | ○（ブラウザに保持） | ○（DB に保持） | ○ |
-| ピン留め（永続保存） | × | × | ○ |
-| AI サマリ | × | × | ○ |
-| AI 翻訳（日本語以外の記事） | × | × | ○ |
+アカウント登録は必須（匿名利用はなし）。未ログインではログイン画面だけを表示する。
+
+| 機能 | 無料アカウント | 有料（Pro） |
+|---|---|---|
+| カテゴリ選択（最大3つ） | ○（DB に保持） | ○ |
+| 記事一覧の閲覧 | ○ | ○ |
+| 保存（6時間で自動消滅） | ○（DB に保持） | ○ |
+| ピン留め（永続保存） | × | ○ |
+| AI サマリ | × | ○ |
+| AI 翻訳（日本語以外の記事） | × | ○ |
 
 「保存は6時間で消える」こと自体が価値。ピン留めはその対比として有料にする。
 
@@ -34,169 +36,77 @@
 ## 3. アーキテクチャ
 
 ```
-[News Provider (未確定) ] ── NewsProvider インターフェース ── MockNewsProvider（現時点の実装）
+[News Provider] ── NewsProvider プロトコル ─┬ MockNewsProvider（開発用）
+                                          └ GoogleAlertsRssProvider（feedparser + httpx）
             │
-            ▼ 定期取得（ingestion job）
-┌─────────────────────────────────────────────┐
-│ Server (Express)                             │
-│  ingestion: 取得 → 正規化 → クラスタリング   │
-│             → スコアリング → 保存            │
-│  api: /api/categories, /api/feed, ...       │
-│  ai:  AiProvider インターフェース（Mock）    │
-│  repositories: ArticleRepository（InMemory） │
-└───────────────────┬─────────────────────────┘
-                    │ JSON
-┌───────────────────▼─────────────────────────┐
-│ Client (React/Vite)                          │
-│  UserDataRepository                          │
-│   ├ LocalUserDataRepository（匿名）          │
-│   └ MockRemoteUserDataRepository（ログイン） │
-│     ※ 将来 SupabaseUserDataRepository に差替 │
-│  AuthService（Mock）/ EntitlementService     │
-└─────────────────────────────────────────────┘
+            ▼ 取り込み（今は管理 API から手動。定期実行の仕組みは後で決める）
+┌──────────────────────────────────────────────────┐
+│ Backend: Python 3.12 + FastAPI（backend/）         │
+│  Vercel の Python Function（api/index.py）で動かす │
+│  ingestion: 取得 → 正規化 → upsert → 実行記録      │
+│  routes:    /api/health, /api/categories,          │
+│             /api/feed, /api/admin/ingest           │
+│  repositories: SQL はここだけ（psycopg 3）         │
+└───────────────┬──────────────────┬───────────────┘
+                │ JSON（camelCase）  │ Supavisor Transaction mode（6543）
+┌───────────────▼────────────┐  ┌──▼─────────────────────────────┐
+│ Frontend: Vite + React 19  │  │ Supabase（Postgres ホスティングのみ）│
+│ （src/、Vercel の静的配信）  │  │ tailor_stream スキーマ             │
+│ 型は OpenAPI から生成       │  │ ロール tailor_stream_app で接続    │
+└────────────────────────────┘  └────────────────────────────────┘
 ```
 
-- 記事取得はリクエスト時ではなく**定期バッチ**で行う。ユーザーのリクエストで外部 API を叩かない（コストと速度のため）。
-- 外部依存（ニュース API・Supabase・AI・決済）はすべてインターフェース越しに使い、現時点はモック実装のみ。環境変数で実装を切り替える。
+- DB 操作・認証・記事取得・決済など責任を伴う処理はすべてバックエンド（Python）で行う。フロントは API だけを呼ぶ。
+- Supabase は Postgres ホスティングとしてのみ使う。Supabase Auth / Data API / RLS / supabase-js は使わない。
+- 記事取得はリクエスト時ではなく取り込みジョブで行う。ユーザーのリクエストで外部 API を叩かない（コストと速度のため）。
+- 外部依存（ニュース API・AI・決済・メール送信）はプロトコル越しに使い、環境変数で実装を切り替える。
+- Vercel では vercel.json で `/api/*` をすべて `api/index.py` にルーティングする。
+- API の型は FastAPI の OpenAPI から `npm run gen:api` で `src/api/schema.d.ts` を生成する（生成物はコミットする）。
 
 ```
-DATA_BACKEND=mock        # mock | supabase（supabase は未実装で起動時エラー）
-NEWS_PROVIDER=mock       # mock | （確定後に追加）
-AI_PROVIDER=mock         # mock | （確定後に追加）
-INGEST_INTERVAL_MINUTES=120
+DATABASE_URL=...          # 必須。tailor_stream_app で Transaction mode（6543）に接続
+ADMIN_SECRET=...          # 必須。/api/admin/* の Bearer トークン
+NEWS_PROVIDER=mock        # mock | google_alerts_rss
+GOOGLE_ALERTS_FEEDS={...} # カテゴリ ID → RSS URL（JSON）。未設定のカテゴリはスキップ
+ARTICLE_TTL_HOURS=48      # articles.expires_at = published_at + この時間
 ```
 
 ## 4. データモデル（Supabase / PostgreSQL）
 
-SQL は `supabase/migrations/` に置く。**現時点では適用しない**（契約前）。ただし構文的に正しく、そのまま `supabase db push` できる品質で書く。
+スキーマ定義の正は `supabase/migrations/20261027000000_tailor_stream_schema.sql`。仕様書には要点だけを書く。
 
-```sql
--- カテゴリ（運営管理）
-create table categories (
-  id          text primary key,              -- 'ai', 'web3' など slug
-  name_ja     text not null,
-  name_en     text not null,
-  description text,
-  sort_order  int  not null default 0,
-  is_active   boolean not null default true
-);
+- 全オブジェクトを `tailor_stream` スキーマに置く。このスキーマは Supabase の Exposed schemas に追加しない（Data API から見せない）。
+- アプリは専用ロール `tailor_stream_app` で接続する（search_path・statement_timeout はロールに設定済み。ログイン権限とパスワードは SQL Editor で手動設定し、リポジトリには置かない）。DDL の権限は持たない。
+- テーブル:
+  - 共有データ: `categories` / `story_clusters` / `articles` / `article_categories` / `article_ai_cache` / `ingestion_runs`
+  - アカウント・認証: `users`（plan もここで持つ）/ `login_tokens` / `sessions`（トークンは SHA-256 のみ保存）
+  - ユーザーデータ: `user_categories` / `user_saves`
+- アプリのバグがあっても DB 側で不正を止めるトリガー:
+  - `user_categories` は1ユーザー最大3件（超えると `hint = 'category_limit_exceeded'`）
+  - `user_saves` の `expires_at` はサーバー時刻で `saved_at + 6h` に上書き。新たなピン留めは Pro かつ期限内のみ（違反は `hint = 'pro_required'`）
+- カテゴリのシードは `supabase/seed.sql`。`backend/feed/categories.py` と一致することをテストで検証している。
 
--- ストーリー（重複記事のまとまり）
-create table story_clusters (
-  id                     text primary key,
-  representative_article_id text,            -- articles.id（循環参照のため FK は後付け）
-  source_count           int not null default 1,   -- 報じた媒体数
-  first_seen_at          timestamptz not null default now(),
-  last_seen_at           timestamptz not null default now()
-);
+### 削除ジョブ
 
--- 記事（全ユーザー共有）
-create table articles (
-  id                  text primary key,      -- 正規化 URL の SHA-256（先頭 32 文字）
-  provider            text not null,         -- 'mock' など
-  provider_article_id text,
-  canonical_url       text not null unique,
-  title               text not null,
-  snippet             text,                  -- プロバイダ提供の概要のみ。本文は保存しない
-  source_name         text,
-  source_domain       text not null,
-  language            text not null,         -- 'ja', 'en' ...
-  region              text,                  -- 'jp', 'global' ...
-  image_url           text,
-  published_at        timestamptz not null,
-  share_count         int,                   -- 取得できない場合は null
-  popularity_score    double precision not null default 0,
-  cluster_id          text references story_clusters(id),
-  fetched_at          timestamptz not null default now(),
-  expires_at          timestamptz not null    -- 一覧から外す時刻（例: 公開から 48h）
-);
-create index on articles (cluster_id);
-create index on articles (published_at desc);
+DB 関数として用意し、呼び出し元（管理 API / pg_cron など）は後で決める。
 
--- 記事とカテゴリの対応（1記事が複数カテゴリに属しうる）
-create table article_categories (
-  article_id  text references articles(id) on delete cascade,
-  category_id text references categories(id),
-  primary key (article_id, category_id)
-);
-
--- ユーザープロフィール（auth.users と 1:1）
-create table profiles (
-  user_id         uuid primary key references auth.users(id) on delete cascade,
-  plan            text not null default 'free' check (plan in ('free','pro')),
-  plan_expires_at timestamptz,
-  created_at      timestamptz not null default now()
-);
-
--- ユーザーの選択カテゴリ（最大3件）
-create table user_categories (
-  user_id     uuid references auth.users(id) on delete cascade,
-  category_id text references categories(id),
-  created_at  timestamptz not null default now(),
-  primary key (user_id, category_id)
-);
--- 最大3件制約はトリガーで実装（insert 時に件数チェック）
-
--- 保存・ピン留め
-create table user_saves (
-  user_id    uuid references auth.users(id) on delete cascade,
-  article_id text references articles(id),
-  saved_at   timestamptz not null default now(),
-  expires_at timestamptz,                    -- ピン留めは null
-  is_pinned  boolean not null default false,
-  primary key (user_id, article_id),
-  check ((is_pinned and expires_at is null) or (not is_pinned and expires_at is not null))
-);
--- ピン留めは profiles.plan = 'pro'（かつ期限内）のときだけ許可：トリガー or RLS の with check で強制
-
--- AI 生成結果の共有キャッシュ
-create table article_ai_cache (
-  article_id text references articles(id) on delete cascade,
-  kind       text not null check (kind in ('summary','translation')),
-  lang       text not null,                  -- 出力言語
-  content    text not null,
-  model      text not null,
-  created_at timestamptz not null default now(),
-  primary key (article_id, kind, lang)
-);
-
--- 取得ジョブの記録（API コスト監視用）
-create table ingestion_runs (
-  id            bigserial primary key,
-  provider      text not null,
-  category_id   text references categories(id),
-  started_at    timestamptz not null default now(),
-  finished_at   timestamptz,
-  status        text not null check (status in ('running','succeeded','failed')),
-  fetched_count int,
-  request_units int,                         -- API の消費単位（トークン・リクエスト数）
-  error         text
-);
-```
-
-### RLS 方針
-
-- `categories` / `articles` / `article_categories` / `story_clusters` / `article_ai_cache`: 全員 select 可、書き込みは service role のみ。
-- `profiles` / `user_categories` / `user_saves`: 本人の行のみ select / insert / update / delete 可。`profiles.plan` はユーザーが更新できない（決済 webhook = service role のみ）。
-
-### 削除ジョブ（pg_cron 想定、モックでは setInterval）
-
-- `user_saves`: `expires_at < now()` の行を削除。
-- `articles`: `expires_at < now()` かつ**どの `user_saves` からも参照されていない**行を削除（ピン留めされた記事は残す）。
+- `cleanup_expired_saves()`: 期限切れの保存を削除。
+- `cleanup_expired_articles()`: 掲載期限切れで、どの保存からも参照されていない記事を削除（ピン留めされた記事は残す）。空になったストーリーも削除。
+- `cleanup_expired_auth()`: 期限切れ・失効済みのセッションと期限切れのログイントークンを削除。
 - 表示側でも `expires_at` で必ずフィルタする（削除ジョブの遅れに依存しない）。
 
 ## 5. 記事の取得・重複除去・スコアリング
 
 ### 取得
 
-- カテゴリごとに `NewsProvider.fetchArticles(category, since)` を呼ぶ。
+- カテゴリごとに `NewsProvider.fetch_articles(category)` を呼ぶ。プロバイダが対応しないカテゴリ（例: RSS URL 未設定）はスキップする。
 - 1 回の取得ごとに `ingestion_runs` に記録（消費単位を含む）。API 選定時の金額試算に使う。
 
 ### 正規化
 
 - URL 正規化: スキーム・ホストを小文字化、`utm_*` などトラッキングパラメータ・フラグメント・末尾スラッシュを除去。
 - 記事 ID: 正規化 URL の SHA-256 先頭 32 文字。
-- タイトル・概要は既存の `sanitizeHtml` を通す。
+- タイトル・概要は `sanitize_html` を通す。Google アラートの転送 URL は元の URL に戻してから正規化する。
 
 ### 重複除去（クラスタリング）
 
@@ -215,16 +125,16 @@ score = w_share  * log1p(share_count ?? 0)
 ```
 
 - 重みはすべて設定ファイルに外出しする（初期値は実装時に妥当な値を置き、テストで順位が意図通りになることを確認する）。
-- 一覧: 選択カテゴリの記事を `expires_at > now()` で絞り、ストーリー単位でまとめてスコア降順。
+- 一覧: 選択カテゴリの記事を `expires_at > now()` で絞り、ストーリー単位で代表1件にまとめて `popularity_score` 降順 → `published_at` 降順。
+- 現状はクラスタリング未実装（`cluster_id` が null の記事は1件で1ストーリー）で、スコアはシェア数の項だけを使う。
 
 ## 6. 保存・ピン留め
 
-- 保存: `expires_at = saved_at + 6h`。期限はサーバー時刻基準（匿名はクライアント時刻で可）。
+- 保存: `expires_at = saved_at + 6h`。期限はサーバー時刻基準（DB トリガーで強制）。
 - カード上に残り時間を表示（「あと 4時間12分」）。残り 30 分未満は警告色。
 - 期限切れの保存は一覧から自動で消える（クライアントでも 1 分ごとに再評価）。
 - ピン留め: Pro のみ。無料ユーザーが押した場合は Pro 案内を表示（エラーにしない）。
 - Pro 解約時: 既存のピン留めは閲覧可能なまま残すが、新規ピン留めは不可（方針。変更しやすく実装する）。
-- 匿名 → アカウント登録時: ブラウザに保持していたカテゴリと**期限内の保存**をアカウントへ移行する。
 
 ## 7. AI サマリ・翻訳
 
@@ -234,19 +144,36 @@ score = w_share  * log1p(share_count ?? 0)
 - 結果は `article_ai_cache` に保存し、全 Pro ユーザーで共有。同じ記事・種類・言語で 2 回生成しない。
 - 生成はユーザーが初めて開いたときにオンデマンドで行う（事前一括生成はしない）。
 
-## 8. 認証・課金（モック）
+## 8. 認証・課金
 
-- `AuthService`: `signInWithEmail(email)` で即ログイン扱いになるモック。将来 Supabase Auth に差し替え。
-- `EntitlementService`: `getPlan(userId)` を返すモック。開発時のみ表示されるデバッグパネルで free / pro を切り替えられる。
+### 認証（メールのマジックリンク）
+
+認証ライブラリに頼らず、最小実装を `backend/auth/` に置く。パスワードは持たない。
+
+- `POST /api/auth/login-link { email }`: email を正規化（前後空白除去・小文字化・形式検証）し、ログイン用トークンをメールで送る。
+  - 登録済みかどうかに関係なく常に同じレスポンスを返す（アカウント存在の推測を防ぐ）。
+  - レート制限: 同一メール 15 分に 3 回、同一 IP 1 時間に 10 回まで（`login_tokens` の件数で判定）。IP は `x-forwarded-for` の先頭。
+  - トークンは `secrets.token_urlsafe(32)`、DB には SHA-256 のみ保存。有効期限 15 分。リンクはフロントの `/auth/verify?token=...`。
+- `POST /api/auth/verify { token }`: リンクスキャナーの GET で消費されないよう、検証はフロントからの POST で行う。1文の UPDATE で原子的に消費し、`users` を upsert、セッションを作成。
+- セッション: Cookie `ts_session`（HttpOnly、本番は Secure、SameSite=Lax、Path=/）。DB には SHA-256 のみ保存。有効期限 `SESSION_TTL_DAYS`（既定 30 日）。
+- `POST /api/auth/logout`、`GET /api/me`。
+- CSRF 対策: GET 以外のリクエストは Origin ヘッダが `APP_BASE_URL` と一致しなければ 403。
+- メール送信: `EmailSender` プロトコル。`EMAIL_PROVIDER=console | resend`。
+- `/api/health` と `/api/categories` 以外の API はログイン必須（`/api/admin/*` は `ADMIN_SECRET`）。
+
+### 課金
+
+- プランは `users.plan` / `users.plan_expires_at` で持つ。変更は決済 webhook の処理からのみ行う。
 - 決済（Stripe 想定）は未実装。UI 上の「Pro にアップグレード」はモーダルで「準備中」を表示。
+- 開発時の Pro 切り替えは SQL で `users.plan` を更新して確認する（デバッグパネルは作らない）。
 
 ## 9. 未確定事項（差し替え前提で作る）
 
 | 項目 | 現状 | 確定後にやること |
 |---|---|---|
-| ニュース API | 未選定（NewsAPI.ai / Mediastack 等を金額で比較中） | `NewsProvider` 実装を1ファイル追加 |
-| DB | Supabase 未契約 | `SupabaseUserDataRepository` / `SupabaseArticleRepository` 実装、migrations 適用 |
+| ニュース API | 未選定（NewsAPI.ai / Mediastack 等を金額で比較中）。当面は Google アラートの RSS | `NewsProvider` 実装を1ファイル追加 |
 | AI | 未選定 | `AiProvider` 実装を追加 |
-| 決済 | 未選定（Stripe 想定） | webhook で `profiles.plan` を更新 |
-| アプリ名 | 仮に TailorStream | `APP_INFO` を変更 |
+| 定期取り込み | 未定（今は `POST /api/admin/ingest` で手動） | Vercel Cron / pg_cron / 外部スケジューラから呼ぶ |
+| 決済 | 未選定（Stripe 想定） | webhook で `users.plan` を更新 |
+| アプリ名 | 仮に TailorStream | `src/config/constants.ts` の `APP_INFO` を変更 |
 | カテゴリ一覧 | 仮のシード | `categories` シードを差し替え |
