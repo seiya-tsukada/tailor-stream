@@ -1,0 +1,58 @@
+[project]
+name = "tailor-stream-backend"
+version = "0.1.0"
+description = "TailorStream のバックエンド（FastAPI）"
+requires-python = ">=3.12"
+# requirements.txt（Vercel 用）と一致させること（tests/test_requirements.py で検証している）
+dependencies = [
+  "fastapi==0.162.0",
+  "pydantic==2.14.1",
+  "pydantic-settings==2.16.1",
+  "psycopg[binary]==3.3.6",
+  "httpx==0.28.1",
+  "feedparser==6.0.14",
+]
+
+[project.optional-dependencies]
+dev = [
+  "uvicorn==0.54.0",
+  "pytest==9.1.1",
+  "ruff==0.17.2",
+  "mypy==2.4.0",
+]
+
+[tool.setuptools]
+packages = []
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["node_modules", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "S", "RUF"]
+ignore = [
+  "E501",   # 行の長さは ruff format に任せる（日本語のコメント・文字列は折り返さない）
+  "RUF001", # 全角記号を含む文字列を許可する
+  "RUF002",
+  "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["feedparser", "feedparser.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+  # fastapi.testclient が出す httpx2 への移行案内（テストの実行には影響しない）
+  "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]

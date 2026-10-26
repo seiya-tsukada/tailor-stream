@@ -12,6 +12,7 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "jsx": "react-jsx",
+    "strict": true,
     "paths": {
       "@/*": [
         "./*"
@@ -22,9 +23,6 @@
   },
   "include": [
     "src",
-    "server",
-    "shared",
-    "server.ts",
     "vite.config.ts"
   ],
   "exclude": [

@@ -1,6 +1,6 @@
 -- 仮カテゴリのシード（docs/SPEC.md §9: 確定後に差し替える）
--- server/seeds/categories.ts と内容を一致させること（server/seeds/categories.test.ts で検証している）
-insert into public.categories (id, name_ja, name_en, description, sort_order, is_active) values
+-- backend/feed/categories.py と内容を一致させること（tests/test_categories_seed.py で検証している）
+insert into tailor_stream.categories (id, name_ja, name_en, description, sort_order, is_active) values
   ('ai', 'AI', 'AI', '生成AI・機械学習・AIエージェントの動向', 10, true),
   ('web3', 'Web3・暗号資産', 'Web3 & Crypto', 'ブロックチェーン・暗号資産・ステーブルコイン', 20, true),
   ('startup', 'スタートアップ', 'Startups', '資金調達・新規事業・起業家', 30, true),
