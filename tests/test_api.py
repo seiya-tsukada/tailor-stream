@@ -76,10 +76,13 @@ class TestFeed:
         assert response.status_code == 422
         assert response.json()["error"]["code"] == "TOO_MANY_CATEGORIES"
 
-    def test_カテゴリ未指定なら422(self, client: TestClient) -> None:
+    def test_未ログインでカテゴリ未指定なら空の一覧(
+        self, client: TestClient, article_repo: FakeArticleRepository
+    ) -> None:
         response = client.get("/api/feed")
-        assert response.status_code == 422
-        assert response.json()["error"]["code"] == "CATEGORIES_REQUIRED"
+        assert response.status_code == 200
+        assert response.json() == {"categoryIds": [], "articles": []}
+        assert article_repo.feed_calls == []
 
 
 class TestAdminIngest:
@@ -187,10 +190,11 @@ def test_必須の環境変数が無ければSettingsErrorに変数名が出る(
 ) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("ADMIN_SECRET", raising=False)
+    monkeypatch.delenv("APP_BASE_URL", raising=False)
     monkeypatch.chdir(tmp_path)  # type: ignore[arg-type]  # リポジトリの .env を読ませない
     get_settings.cache_clear()
     try:
-        with pytest.raises(SettingsError, match="ADMIN_SECRET, DATABASE_URL"):
+        with pytest.raises(SettingsError, match="ADMIN_SECRET, APP_BASE_URL, DATABASE_URL"):
             get_settings()
     finally:
         get_settings.cache_clear()

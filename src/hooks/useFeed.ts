@@ -4,8 +4,11 @@ import { MESSAGES } from '../config/messages';
 import { fetchFeed } from '../services/apiClient';
 import { getErrorMessage } from '../utils/errors';
 
-/** 選択カテゴリの記事一覧。カテゴリが変わるたびに取り直す（古いリクエストの結果は捨てる） */
-export function useFeed(categoryIds: readonly string[]) {
+/**
+ * 選択カテゴリの記事一覧。カテゴリかログイン状態が変わるたびに取り直す（古いリクエストの結果は捨てる）
+ * enabled が false の間（ログイン状態の確認中など）は取得しない
+ */
+export function useFeed(categoryIds: readonly string[], userId: string | null, enabled: boolean) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +18,7 @@ export function useFeed(categoryIds: readonly string[]) {
   const load = useCallback(async () => {
     const seq = ++requestSeq.current;
     const ids = key ? key.split(',') : [];
-    if (ids.length === 0) {
+    if (!enabled || ids.length === 0) {
       setArticles([]);
       setError(null);
       setIsLoading(false);
@@ -32,7 +35,8 @@ export function useFeed(categoryIds: readonly string[]) {
     } finally {
       if (seq === requestSeq.current) setIsLoading(false);
     }
-  }, [key]);
+    // userId はリクエストには使わないが、ログイン状態が変わったら取り直す
+  }, [key, userId, enabled]);
 
   useEffect(() => {
     void load();

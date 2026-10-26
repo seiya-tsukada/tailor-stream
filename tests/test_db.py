@@ -17,6 +17,14 @@ from backend.ingestion.service import IngestionService
 from backend.repositories.articles import ArticleUpsert, PgArticleRepository
 from backend.repositories.categories import PgCategoryRepository
 from backend.repositories.ingestion_runs import PgIngestionRunRepository
+from backend.repositories.login_tokens import PgLoginTokenRepository
+from backend.repositories.sessions import PgSessionRepository
+from backend.repositories.user_categories import (
+    CategoryLimitExceededError,
+    PgUserCategoryRepository,
+    UnknownCategoryError,
+)
+from backend.repositories.users import PgUserRepository
 
 
 @pytest.fixture
@@ -93,3 +101,59 @@ def test_同じストーリーの記事は代表1件だけ返し期限切れは�
     feed = articles.list_feed(["security"], 100)
     ids = [a.id for a in feed if a.id.startswith("t-")]
     assert ids == ["t-high", "t-solo"]
+
+
+# =============================================================
+# 認証・ユーザーデータ
+# =============================================================
+
+
+def test_ログイントークンは1回だけ消費でき期限切れは消費できない(conn: DbConnection) -> None:
+    tokens = PgLoginTokenRepository(conn)
+    now = conn.execute("select now() as now").fetchone()
+    assert now is not None
+    tokens.create("db@example.com", "hash-valid", now["now"] + timedelta(minutes=15), "203.0.113.1")
+    tokens.create("db@example.com", "hash-expired", now["now"] - timedelta(seconds=1), None)
+
+    assert tokens.consume("hash-valid") == "db@example.com"
+    assert tokens.consume("hash-valid") is None
+    assert tokens.consume("hash-expired") is None
+    assert tokens.count_recent_by_email("db@example.com", now["now"] - timedelta(minutes=15)) == 2
+    assert tokens.count_recent_by_ip("203.0.113.1", now["now"] - timedelta(hours=1)) == 1
+
+
+def test_ユーザーのupsertとセッション(conn: DbConnection) -> None:
+    users = PgUserRepository(conn)
+    first = users.upsert_on_login("db@example.com")
+    again = users.upsert_on_login("db@example.com")
+    assert first.id == again.id
+    assert first.plan == "free"
+
+    sessions = PgSessionRepository(conn)
+    now = conn.execute("select now() as now").fetchone()
+    assert now is not None
+    sessions.create(first.id, "session-hash", now["now"] + timedelta(days=30), "ua", "203.0.113.1")
+    active = sessions.find_active("session-hash")
+    assert active is not None and active.user.email == "db@example.com"
+    sessions.touch(active.id)
+
+    sessions.revoke("session-hash")
+    assert sessions.find_active("session-hash") is None
+
+
+def test_選択カテゴリの入れ替えとトリガーの上限(conn: DbConnection) -> None:
+    user = PgUserRepository(conn).upsert_on_login("db@example.com")
+    repo = PgUserCategoryRepository(conn)
+
+    repo.replace(user.id, ["web3", "ai"])
+    assert repo.list_ids(user.id) == ["web3", "ai"]
+    repo.replace(user.id, ["security"])
+    assert repo.list_ids(user.id) == ["security"]
+
+    with pytest.raises(CategoryLimitExceededError):
+        repo.replace(user.id, ["ai", "web3", "startup", "fintech"])
+    # 失敗した入れ替えはロールバックされ、元の選択が残る
+    assert repo.list_ids(user.id) == ["security"]
+
+    with pytest.raises(UnknownCategoryError):
+        repo.replace(user.id, ["unknown"])

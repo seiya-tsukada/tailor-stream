@@ -21,10 +21,12 @@
 │   ├── db.py                 # psycopg 3 の接続（リクエスト単位、prepare_threshold=None）
 │   ├── models.py             # API の入出力（camelCase の JSON）
 │   ├── errors.py             # 固定のエラーコード
+│   ├── auth/                 # マジックリンク認証・セッション・Origin チェック
+│   ├── email/                # EmailSender（console / resend）
 │   ├── repositories/         # SQL はここだけ
 │   ├── feed/                 # URL 正規化・記事 ID・サニタイズ・NewsProvider と実装
 │   ├── ingestion/            # 取得 → 正規化 → upsert → ingestion_runs 記録
-│   └── routes/               # health, categories, feed, admin
+│   └── routes/               # health, categories, feed, me, admin
 ├── tests/                    # pytest
 ├── src/
 │   ├── api/                  # schema.d.ts（OpenAPI から生成）と型の別名
@@ -44,9 +46,15 @@
 | --- | --- | --- |
 | GET | `/api/health` | ヘルスチェック |
 | GET | `/api/categories` | アクティブなカテゴリ一覧 |
-| GET | `/api/feed?categories=ai,web3` | 選択カテゴリ（最大3件）の記事。ストーリーごとに代表1件、スコア降順 |
+| GET | `/api/feed?categories=ai,web3` | 選択カテゴリ（最大3件）の記事。ストーリーごとに代表1件、スコア降順。ログイン中はクエリではなくアカウントのカテゴリを使う |
+| POST | `/api/auth/login-link` | ログインリンクをメールで送る（body `{ "email": "..." }`） |
+| POST | `/api/auth/verify` | リンクのトークンでログインし、セッション Cookie `ts_session` を発行する |
+| POST | `/api/auth/logout` | ログアウト |
+| GET | `/api/me` | ログイン中のユーザー（要ログイン） |
+| GET / PUT | `/api/me/categories` | 選択カテゴリの取得・全件入れ替え（要ログイン。body `{ "categoryIds": [...] }`） |
 | POST | `/api/admin/ingest` | 記事の取り込み（`Authorization: Bearer <ADMIN_SECRET>`。body `{ "categoryId": "ai" }` を省略すると全カテゴリ） |
 
+ログインは任意です（未ログインでもカテゴリを選んで閲覧できます）。GET 以外のリクエストは、Origin ヘッダが `APP_BASE_URL` と一致しないと 403 になります（`/api/admin/*` を除く）。
 エラーは `{"error": {"code": "...", "message": "..."}}` 形式で返します。API ドキュメントはローカルで `http://127.0.0.1:8000/api/docs` から見られます。
 
 ## ローカル開発
@@ -81,7 +89,7 @@ alter role tailor_stream_app login password '<ランダムなパスワード>';
 
 ### 3. 環境変数
 
-`.env.example` を `.env` にコピーし、`DATABASE_URL`（Supavisor の Transaction mode、ポート 6543、ユーザーは `tailor_stream_app`）と `ADMIN_SECRET` を設定します。
+`.env.example` を `.env` にコピーし、`DATABASE_URL`（Supavisor の Transaction mode、ポート 6543、ユーザーは `tailor_stream_app`）・`ADMIN_SECRET`・`APP_BASE_URL`（ローカルは `http://localhost:5173`）を設定します。
 
 ### 4. 起動（2つのターミナルで並行起動）
 
@@ -102,6 +110,8 @@ curl -X POST http://127.0.0.1:8000/api/admin/ingest -H "Authorization: Bearer $A
 ```
 
 `http://localhost:5173/?categories=ai,web3` を開くと、取り込んだ記事が表示されます（選択カテゴリは一時的に URL クエリで保持しています）。
+
+ログインを試すときは、画面右上の「ログイン / 登録」からメールアドレスを送ります。`EMAIL_PROVIDER=console` ではメールは送られず、ログインリンクが uvicorn のログに出るので、それをブラウザで開きます。
 
 `NEWS_PROVIDER=google_alerts_rss` にして `GOOGLE_ALERTS_FEEDS` にカテゴリごとの RSS URL を設定すると、Google アラートから取り込みます。
 
@@ -124,5 +134,6 @@ npm run lint && npm test && ruff check . && ruff format --check . && mypy backen
 ## デプロイ（Vercel）
 
 - リポジトリを Vercel にインポートすると、`vercel.json` に従ってフロントを `vite build` で静的配信し、`/api/*` を `api/index.py`（Python Function）にルーティングします。
-- Environment Variables に `DATABASE_URL` と `ADMIN_SECRET`（必要に応じて `NEWS_PROVIDER` など）を設定します。`VITE_` 接頭辞は付けません。
+- Environment Variables に `DATABASE_URL`・`ADMIN_SECRET`・`APP_BASE_URL`（デプロイ先の URL）・`EMAIL_PROVIDER=resend`・`RESEND_API_KEY`・`EMAIL_FROM`（必要に応じて `NEWS_PROVIDER` など）を設定します。`VITE_` 接頭辞は付けません。
+- `EMAIL_PROVIDER=console` は localhost 以外では起動時にエラーになります（ログインリンクをログに出さないため）。
 - デプロイ後、`https://<deployment>/api/health` が `{"status":"ok",...}` を返すことを確認します。

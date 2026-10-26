@@ -9,10 +9,21 @@ interface CategoryPickerProps {
   categories: Category[];
   selectedIds: string[];
   isLoading: boolean;
+  /** 保存中など、選択を受け付けない間は true */
+  disabled?: boolean;
+  /** 未ログイン時に出すログインの案内（ログイン中は null） */
+  footer?: React.ReactNode;
   onChange: (ids: string[]) => void;
 }
 
-export const CategoryPicker: React.FC<CategoryPickerProps> = ({ categories, selectedIds, isLoading, onChange }) => {
+export const CategoryPicker: React.FC<CategoryPickerProps> = ({
+  categories,
+  selectedIds,
+  isLoading,
+  disabled = false,
+  footer,
+  onChange,
+}) => {
   const [limitReached, setLimitReached] = useState(false);
 
   const handleToggle = (categoryId: string) => {
@@ -41,9 +52,10 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({ categories, sele
                   key={category.id}
                   type="button"
                   aria-pressed={isSelected}
+                  disabled={disabled}
                   title={category.description ?? undefined}
                   onClick={() => handleToggle(category.id)}
-                  className={`h-8 px-3 rounded-full text-xs font-medium border flex items-center gap-1 transition-colors ${
+                  className={`h-8 px-3 rounded-full text-xs font-medium border flex items-center gap-1 transition-colors disabled:opacity-60 ${
                     isSelected
                       ? 'bg-blue-600 border-blue-500 text-white'
                       : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-zinc-500'
@@ -55,6 +67,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({ categories, sele
               );
             })}
       </div>
+      {footer}
     </section>
   );
 };
