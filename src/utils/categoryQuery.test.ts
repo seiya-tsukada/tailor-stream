@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCategoryQuery, parseCategoryQuery, toggleCategory } from './categoryQuery';
+import { buildCategoryQuery, parseCategoryIds, parseCategoryQuery, toggleCategory } from './categoryQuery';
 
 describe('parseCategoryQuery', () => {
   it('カンマ区切りの ID を空要素・重複を除いて返す', () => {
@@ -34,5 +34,11 @@ describe('toggleCategory', () => {
   it('上限に達していると追加できず null を返す', () => {
     expect(toggleCategory(['a', 'b', 'c'], 'd', 3)).toBeNull();
     expect(toggleCategory(['a', 'b', 'c'], 'a', 3)).toEqual(['b', 'c']);
+  });
+});
+
+describe('parseCategoryIds', () => {
+  it('前後の空白・空要素・重複を除く', () => {
+    expect(parseCategoryIds(' ai ,,web3,ai')).toEqual(['ai', 'web3']);
   });
 });

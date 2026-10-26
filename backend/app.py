@@ -9,15 +9,17 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from backend.auth import router as auth_router
+from backend.auth.dependencies import verify_origin
 from backend.config import API_PREFIX, ERROR_MESSAGES, SettingsError, get_settings
 from backend.errors import AppError, ErrorCode
 from backend.models import ErrorBody, ErrorResponse
-from backend.routes import admin, categories, feed, health
+from backend.routes import admin, categories, feed, health, me
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +74,8 @@ def create_app() -> FastAPI:
         title="TailorStream API",
         version="0.1.0",
         lifespan=lifespan,
+        # CSRF 対策（GET 以外は Origin を検証。/api/admin/* は対象外）
+        dependencies=[Depends(verify_origin)],
         openapi_url=f"{API_PREFIX}/openapi.json",
         docs_url=f"{API_PREFIX}/docs",
         redoc_url=None,
@@ -85,9 +89,9 @@ def create_app() -> FastAPI:
 
     # エラー時のレスポンス形式を OpenAPI（= フロントの生成型）に載せる
     error_responses: dict[int | str, dict[str, Any]] = {
-        status: {"model": ErrorResponse} for status in (422, 500)
+        status: {"model": ErrorResponse} for status in (403, 422, 500)
     }
-    for module in (health, categories, feed, admin):
+    for module in (health, categories, feed, auth_router, me, admin):
         app.include_router(module.router, prefix=API_PREFIX, responses=error_responses)
     return app
 

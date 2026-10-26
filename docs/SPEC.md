@@ -11,16 +11,18 @@
 
 ### 価値の線引き
 
-アカウント登録は必須（匿名利用はなし）。未ログインではログイン画面だけを表示する。
+アカウント登録は任意。未ログインでもカテゴリを選んで記事一覧を読める。ログインすると選択カテゴリがアカウント（DB）に保存され、どの端末でも同じ設定で使える。
 
-| 機能 | 無料アカウント | 有料（Pro） |
-|---|---|---|
-| カテゴリ選択（最大3つ） | ○（DB に保持） | ○ |
-| 記事一覧の閲覧 | ○ | ○ |
-| 保存（6時間で自動消滅） | ○（DB に保持） | ○ |
-| ピン留め（永続保存） | × | ○ |
-| AI サマリ | × | ○ |
-| AI 翻訳（日本語以外の記事） | × | ○ |
+| 機能 | 未ログイン | 無料アカウント | 有料（Pro） |
+|---|---|---|---|
+| カテゴリ選択（最大3つ） | ○（URL クエリに保持） | ○（DB に保持） | ○ |
+| 記事一覧の閲覧 | ○ | ○ | ○ |
+| 保存（6時間で自動消滅） | ×（ログインが必要） | ○（DB に保持） | ○ |
+| ピン留め（永続保存） | × | × | ○ |
+| AI サマリ | × | × | ○ |
+| AI 翻訳（日本語以外の記事） | × | × | ○ |
+
+- 未ログインで選んでいたカテゴリは、ログイン時にアカウントのカテゴリが未設定ならアカウントへ移す（設定済みなら上書きしない）。
 
 「保存は6時間で消える」こと自体が価値。ピン留めはその対比として有料にする。
 
@@ -44,8 +46,9 @@
 │ Backend: Python 3.12 + FastAPI（backend/）         │
 │  Vercel の Python Function（api/index.py）で動かす │
 │  ingestion: 取得 → 正規化 → upsert → 実行記録      │
-│  routes:    /api/health, /api/categories,          │
-│             /api/feed, /api/admin/ingest           │
+│  routes:    /api/health, /api/categories, /api/feed│
+│             /api/auth/*, /api/me/*, /api/admin/*   │
+│  auth:      マジックリンク + セッション Cookie      │
 │  repositories: SQL はここだけ（psycopg 3）         │
 └───────────────┬──────────────────┬───────────────┘
                 │ JSON（camelCase）  │ Supavisor Transaction mode（6543）
@@ -69,6 +72,9 @@ ADMIN_SECRET=...          # 必須。/api/admin/* の Bearer トークン
 NEWS_PROVIDER=mock        # mock | google_alerts_rss
 GOOGLE_ALERTS_FEEDS={...} # カテゴリ ID → RSS URL（JSON）。未設定のカテゴリはスキップ
 ARTICLE_TTL_HOURS=48      # articles.expires_at = published_at + この時間
+APP_BASE_URL=...          # 必須。フロントの URL（ログインリンク・Origin チェック・Cookie の Secure 判定）
+SESSION_TTL_DAYS=30       # セッションの有効期限
+EMAIL_PROVIDER=console    # console（ローカル開発のみ）| resend（RESEND_API_KEY・EMAIL_FROM が必要）
 ```
 
 ## 4. データモデル（Supabase / PostgreSQL）
@@ -157,9 +163,14 @@ score = w_share  * log1p(share_count ?? 0)
 - `POST /api/auth/verify { token }`: リンクスキャナーの GET で消費されないよう、検証はフロントからの POST で行う。1文の UPDATE で原子的に消費し、`users` を upsert、セッションを作成。
 - セッション: Cookie `ts_session`（HttpOnly、本番は Secure、SameSite=Lax、Path=/）。DB には SHA-256 のみ保存。有効期限 `SESSION_TTL_DAYS`（既定 30 日）。
 - `POST /api/auth/logout`、`GET /api/me`。
-- CSRF 対策: GET 以外のリクエストは Origin ヘッダが `APP_BASE_URL` と一致しなければ 403。
+- CSRF 対策: GET 以外のリクエストは Origin ヘッダが `APP_BASE_URL` と一致しなければ 403（`/api/admin/*` を除く）。
 - メール送信: `EmailSender` プロトコル。`EMAIL_PROVIDER=console | resend`。
-- `/api/health` と `/api/categories` 以外の API はログイン必須（`/api/admin/*` は `ADMIN_SECRET`）。
+- ログインは任意。API ごとの扱い:
+  - ログイン不要: `/api/health`、`/api/categories`、`/api/auth/*`
+  - ログイン任意: `GET /api/feed`（ログイン中はユーザーの選択カテゴリ、未ログインはクエリ `?categories=` を使う。未選択なら空の一覧）
+  - ログイン必須（未ログインは 401）: `/api/me`、`/api/me/categories`（以後の保存・ピン留めなどユーザーデータの API も同様）
+  - `/api/admin/*` は `ADMIN_SECRET` の Bearer トークン（Cookie を使わないため Origin チェックの対象外）
+- `EMAIL_PROVIDER=console`（ログインリンクをログに出す）はローカル開発（`APP_BASE_URL` が localhost）でのみ使える。
 
 ### 課金
 

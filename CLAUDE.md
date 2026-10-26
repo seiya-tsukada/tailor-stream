@@ -25,10 +25,19 @@ tailor-stream は、ユーザーが選んだカテゴリ（最大3つ）のニ�
 - `backend/db.py`: psycopg 3。`prepare_threshold=None` を必ず指定し、リクエスト単位で接続する（プールを使う場合も max 2 以下）
 - `backend/models.py`: API の入出力（pydantic）。JSON はキャメルケース
 - `backend/repositories/`: SQL はここだけに書く。ユーザーデータを扱う関数は `user_id` を必須引数にする
+- `backend/auth/`: マジックリンク認証（トークン・セッション・`get_current_user` / `get_optional_user`・Origin チェック）
+- `backend/email/`: `EmailSender` プロトコル + console（ローカル開発のみ）/ resend
 - `backend/feed/`: URL 正規化・記事 ID・サニタイズ・`NewsProvider` プロトコルと実装
 - `backend/ingestion/`: 取得 → 正規化 → upsert → `ingestion_runs` 記録
 - `backend/routes/`: ルーター。依存関数は `routes/deps.py`（テストでは `dependency_overrides` でフェイクに差し替える）
 - `tests/`: pytest。DB を使うテストは `TEST_DATABASE_URL` があるときだけ実行し、それ以外は repositories をフェイクにする
+
+## 認証
+
+- ログインは任意。未ログインでもカテゴリ選択と記事一覧は使える。ユーザーデータの API はログイン必須（`CurrentUserDep`）、
+  ログインの有無で振る舞いが変わる API は `OptionalUserDep` を使う
+- GET 以外は Origin が `APP_BASE_URL` と一致しないと 403（`/api/admin/*` は Bearer で守るため対象外）
+- トークン・セッションは DB に SHA-256 だけを保存する。トークンやセッション Cookie をログ・レスポンス本文に出さない
 
 ## 型の共有
 

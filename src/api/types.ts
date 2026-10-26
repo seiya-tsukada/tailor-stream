@@ -10,3 +10,5 @@ export type Article = Schemas['ArticleOut'];
 export type FeedResponse = Schemas['FeedResponse'];
 export type ErrorResponse = Schemas['ErrorResponse'];
 export type ErrorCode = Schemas['ErrorCode'];
+export type Me = Schemas['MeResponse'];
+export type UserCategories = Schemas['UserCategoriesResponse'];

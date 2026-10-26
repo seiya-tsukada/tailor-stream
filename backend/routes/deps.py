@@ -14,6 +14,10 @@ from backend.feed.provider import NewsProvider
 from backend.repositories.articles import ArticleRepository, PgArticleRepository
 from backend.repositories.categories import CategoryRepository, PgCategoryRepository
 from backend.repositories.ingestion_runs import IngestionRunRepository, PgIngestionRunRepository
+from backend.repositories.login_tokens import LoginTokenRepository, PgLoginTokenRepository
+from backend.repositories.sessions import PgSessionRepository, SessionRepository
+from backend.repositories.user_categories import PgUserCategoryRepository, UserCategoryRepository
+from backend.repositories.users import PgUserRepository, UserRepository
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 ConnectionDep = Annotated[DbConnection, Depends(get_connection)]
@@ -29,6 +33,22 @@ def get_article_repository(conn: ConnectionDep) -> ArticleRepository:
 
 def get_ingestion_run_repository(conn: ConnectionDep) -> IngestionRunRepository:
     return PgIngestionRunRepository(conn)
+
+
+def get_user_repository(conn: ConnectionDep) -> UserRepository:
+    return PgUserRepository(conn)
+
+
+def get_login_token_repository(conn: ConnectionDep) -> LoginTokenRepository:
+    return PgLoginTokenRepository(conn)
+
+
+def get_session_repository(conn: ConnectionDep) -> SessionRepository:
+    return PgSessionRepository(conn)
+
+
+def get_user_category_repository(conn: ConnectionDep) -> UserCategoryRepository:
+    return PgUserCategoryRepository(conn)
 
 
 def get_news_provider(settings: SettingsDep) -> Iterator[NewsProvider]:
@@ -52,3 +72,7 @@ CategoryRepositoryDep = Annotated[CategoryRepository, Depends(get_category_repos
 ArticleRepositoryDep = Annotated[ArticleRepository, Depends(get_article_repository)]
 IngestionRunRepositoryDep = Annotated[IngestionRunRepository, Depends(get_ingestion_run_repository)]
 NewsProviderDep = Annotated[NewsProvider, Depends(get_news_provider)]
+UserRepositoryDep = Annotated[UserRepository, Depends(get_user_repository)]
+LoginTokenRepositoryDep = Annotated[LoginTokenRepository, Depends(get_login_token_repository)]
+SessionRepositoryDep = Annotated[SessionRepository, Depends(get_session_repository)]
+UserCategoryRepositoryDep = Annotated[UserCategoryRepository, Depends(get_user_category_repository)]

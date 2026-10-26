@@ -1,13 +1,17 @@
 import { LIMITS, URL_QUERY_KEYS } from '../config/constants';
 
-/** URL クエリ（?categories=ai,web3）から選択カテゴリを読む。空要素・重複を除き最大件数で切る */
-export function parseCategoryQuery(search: string, max: number = LIMITS.MAX_CATEGORIES): string[] {
-  const raw = new URLSearchParams(search).get(URL_QUERY_KEYS.CATEGORIES) ?? '';
+/** カンマ区切りのカテゴリ ID を、空要素・重複を除いて最大件数で切る */
+export function parseCategoryIds(raw: string, max: number = LIMITS.MAX_CATEGORIES): string[] {
   const ids = raw
     .split(',')
     .map((id) => id.trim())
     .filter((id) => id.length > 0);
   return [...new Set(ids)].slice(0, max);
+}
+
+/** URL クエリ（?categories=ai,web3）から選択カテゴリを読む */
+export function parseCategoryQuery(search: string, max: number = LIMITS.MAX_CATEGORIES): string[] {
+  return parseCategoryIds(new URLSearchParams(search).get(URL_QUERY_KEYS.CATEGORIES) ?? '', max);
 }
 
 /** 選択カテゴリを URL クエリに書き戻す（他のクエリは残す。空なら categories を消す） */
