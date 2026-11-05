@@ -1,0 +1,83 @@
+# ローカル開発用（docker compose up）。本番（Vercel + Supabase）では使わない
+#
+# - db:       Supabase の代わりのローカル Postgres。初回起動時に supabase/migrations と seed.sql を適用する
+#             データは名前付きボリューム tailor-stream_db-data（/var/lib/docker/volumes/tailor-stream_db-data/_data）に置く
+# - api:      FastAPI（uvicorn --reload）。メール送信は console 固定（ログインリンクはログに出る）
+# - frontend: Vite。/api を api サービスに転送する
+#
+# ここに書いたパスワード・シークレットはローカル専用のダミー値。本番の値は Vercel の Environment Variables に置く。
+# ホスト側のポートはリポジトリ直下の .env（または環境変数）の WEB_PORT / API_PORT / DB_PORT で変えられる。
+
+name: tailor-stream
+
+x-local-secrets:
+  # ローカル専用の値（本番では使わない）
+  postgres-password: &postgres-password postgres
+  app-db-password: &app-db-password tailor_stream_app_local
+  admin-secret: &admin-secret local-admin-secret-0123456789
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: *postgres-password
+      POSTGRES_DB: postgres
+      TAILOR_STREAM_TEST_DB: tailor_stream_test
+      TAILOR_STREAM_APP_PASSWORD: *app-db-password
+    ports:
+      - "127.0.0.1:${DB_PORT:-54330}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./docker/db/init.sh:/docker-entrypoint-initdb.d/10-tailor-stream.sh:ro
+      - ./supabase/migrations:/tailor-stream/migrations:ro
+      - ./supabase/seed.sql:/tailor-stream/seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    # 任意の設定（GOOGLE_ALERTS_FEEDS など）は .env から読む。下の environment が .env より優先される
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # 本番は Supavisor（6543）経由だが、ローカルは Postgres に直接つなぐ（同じ tailor_stream_app ロール）
+      DATABASE_URL: postgresql://tailor_stream_app:tailor_stream_app_local@db:5432/postgres
+      ADMIN_SECRET: *admin-secret
+      APP_BASE_URL: http://localhost:${WEB_PORT:-5180}
+      # 通知（メール）はローカルでは送らない。ログインリンクは api のログに出る
+      EMAIL_PROVIDER: console
+      NEWS_PROVIDER: ${NEWS_PROVIDER:-mock}
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app/backend
+      - ./api:/app/api
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    environment:
+      API_PROXY_TARGET: http://api:8000
+    ports:
+      - "127.0.0.1:${WEB_PORT:-5180}:5173"
+    volumes:
+      - .:/app
+      # ホストの node_modules（macOS 用）を使わず、イメージ内のものを使う
+      - /app/node_modules
+    depends_on:
+      - api
+
+volumes:
+  # Docker が管理する名前付きボリューム（tailor-stream_db-data）。docker compose down -v で削除される
+  db-data:
