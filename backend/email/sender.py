@@ -1,4 +1,4 @@
-"""メール送信（EMAIL_PROVIDER=console | resend で切り替える）"""
+"""メール送信（EMAIL_PROVIDER=console | resend | noop で切り替える）"""
 
 import logging
 from dataclasses import dataclass
@@ -31,6 +31,16 @@ class ConsoleEmailSender:
         )
 
 
+class NoopEmailSender:
+    """モック: メールを送らず、ログにも宛先・本文（ログインリンク）を出さない
+
+    Resend を用意する前に本番（Vercel）へデプロイするためのもの。ログインメールは届かない。
+    """
+
+    def send(self, message: EmailMessage) -> None:
+        logger.info("[NoopEmailSender] EMAIL_PROVIDER=noop のためメールを送信しませんでした")
+
+
 class ResendEmailSender:
     """Resend の HTTP API で送る（SDK は使わない）"""
 
@@ -59,4 +69,6 @@ def create_email_sender(settings: Settings, client: httpx.Client) -> EmailSender
         # Settings の検証で resend のときは両方そろっていることを保証している
         assert settings.resend_api_key is not None and settings.email_from is not None  # noqa: S101
         return ResendEmailSender(settings.resend_api_key, settings.email_from, client)
+    if settings.email_provider == "noop":
+        return NoopEmailSender()
     return ConsoleEmailSender()

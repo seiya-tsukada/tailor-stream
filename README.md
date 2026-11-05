@@ -136,4 +136,20 @@ npm run lint && npm test && ruff check . && ruff format --check . && mypy backen
 - リポジトリを Vercel にインポートすると、`vercel.json` に従ってフロントを `vite build` で静的配信し、`/api/*` を `api/index.py`（Python Function）にルーティングします。
 - Environment Variables に `DATABASE_URL`・`ADMIN_SECRET`・`APP_BASE_URL`（デプロイ先の URL）・`EMAIL_PROVIDER=resend`・`RESEND_API_KEY`・`EMAIL_FROM`（必要に応じて `NEWS_PROVIDER` など）を設定します。`VITE_` 接頭辞は付けません。
 - `EMAIL_PROVIDER=console` は localhost 以外では起動時にエラーになります（ログインリンクをログに出さないため）。
+
+### Supabase・Resend を用意する前のデプロイ（モック）
+
+DB とメールをモックにして、画面と API だけを Vercel で動かせます。Environment Variables は次の4つだけです。
+
+| 変数 | 値 |
+|---|---|
+| `DATA_BACKEND` | `memory`（`DATABASE_URL` は不要） |
+| `EMAIL_PROVIDER` | `noop` |
+| `ADMIN_SECRET` | 16文字以上のランダムな値 |
+| `APP_BASE_URL` | `https://<your-app>.vercel.app` |
+
+- カテゴリはシードと同じもの、記事は起動後の最初のアクセスで `NEWS_PROVIDER=mock` のサンプル記事を取り込んだものが出ます。
+- データは Function のインスタンスのメモリにしか残りません。インスタンスが入れ替わると消え、インスタンス間でも共有されません。
+- `noop` はメールを送らないので、ログイン・ユーザーごとのカテゴリ保存は本番では試せません（ローカルでは console で試せます）。
+- Supabase・Resend を用意したら `DATA_BACKEND=postgres` と `DATABASE_URL`、`EMAIL_PROVIDER=resend` と `RESEND_API_KEY`・`EMAIL_FROM` に切り替えます。
 - デプロイ後、`https://<deployment>/api/health` が `{"status":"ok",...}` を返すことを確認します。
