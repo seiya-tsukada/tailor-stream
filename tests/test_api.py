@@ -109,7 +109,7 @@ class TestAdminIngest:
         news_provider: FakeNewsProvider,
         article_repo: FakeArticleRepository,
     ) -> None:
-        # 取り込みは実時刻で掲載期限を判定するので、記事の公開時刻も実時刻から作る
+        # 管理 API の取り込みは実時刻で掲載期限を判定するので、公開時刻も実時刻を基準にする
         news_provider.articles["ai"] = [fetched("https://example.com/1", now=datetime.now(UTC))]
 
         response = client.post("/api/admin/ingest", headers=ADMIN_HEADERS)

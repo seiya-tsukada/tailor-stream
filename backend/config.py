@@ -12,7 +12,8 @@ from pydantic import Field, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 NewsProviderName = Literal["mock", "google_alerts_rss"]
-EmailProviderName = Literal["console", "resend"]
+EmailProviderName = Literal["console", "resend", "noop"]
+DataBackendName = Literal["postgres", "memory"]
 LOCAL_HOSTS: Final = frozenset({"localhost", "127.0.0.1", "::1"})
 # APP_BASE_URL も VERCEL_PROJECT_PRODUCTION_URL も無いときのフロントの URL（Vite の既定ポート）
 DEFAULT_APP_BASE_URL: Final = "http://localhost:5173"
@@ -25,7 +26,10 @@ class Settings(BaseSettings):
     # 記事の取得元。mock のときは DATABASE_URL・ADMIN_SECRET・メール設定が無くても動く（下記のフェイルオーバー）
     news_provider: NewsProviderName = "mock"
 
-    # mock 以外では必須。mock で未設定ならメモリ上のストア（モック記事・プロセス内だけのユーザーデータ）で動く
+    # データの保存先: postgres | memory（DB を使わないモック。プロセス内のメモリにだけ置く）
+    # 未設定なら DATABASE_URL があれば postgres、無ければ memory（mock のときだけ。effective_data_backend）
+    data_backend: DataBackendName | None = None
+    # DATA_BACKEND=postgres と、mock 以外では必須
     database_url: str | None = Field(default=None, min_length=1)
     # mock 以外では必須。未設定なら管理 API（/api/admin/*）は 503
     admin_secret: str | None = Field(default=None, min_length=ADMIN_SECRET_MIN_LENGTH)
@@ -50,6 +54,7 @@ class Settings(BaseSettings):
     email_from: str | None = None
 
     @field_validator(
+        "data_backend",
         "database_url",
         "admin_secret",
         "email_provider",
@@ -66,6 +71,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _resolve(self) -> Self:
         self.app_base_url = _normalize_base_url(self._raw_app_base_url())
+        if self.data_backend == "postgres" and self.database_url is None:
+            raise ValueError("DATA_BACKEND=postgres には DATABASE_URL が必要です")
         if self.news_provider != "mock":
             missing = [
                 name
@@ -93,9 +100,11 @@ class Settings(BaseSettings):
         return urlsplit(self.app_base_url).hostname in LOCAL_HOSTS
 
     @property
-    def uses_memory_store(self) -> bool:
-        """DATABASE_URL が無い（mock のときだけ許される）ならメモリ上のストアを使う"""
-        return self.database_url is None
+    def effective_data_backend(self) -> DataBackendName:
+        """DATA_BACKEND が未設定なら、DATABASE_URL の有無で決める（無いのは mock のときだけ許される）"""
+        if self.data_backend is not None:
+            return self.data_backend
+        return "postgres" if self.database_url is not None else "memory"
 
     @property
     def effective_email_provider(self) -> EmailProviderName | None:
@@ -103,8 +112,11 @@ class Settings(BaseSettings):
 
         - resend: RESEND_API_KEY と EMAIL_FROM がそろっているときだけ
         - console: ログインリンク（秘密）をログに出すため、ローカル開発（APP_BASE_URL が localhost）でだけ
+        - noop: 明示したときだけ（送らずに成功扱いにするモック。本番でも使える）
         - EMAIL_PROVIDER が未設定なら resend → console の順に使えるものを選ぶ
         """
+        if self.email_provider == "noop":
+            return "noop"
         resend_ready = self.resend_api_key is not None and self.email_from is not None
         candidates: tuple[EmailProviderName, ...] = (
             (self.email_provider,) if self.email_provider else ("resend", "console")
@@ -133,8 +145,10 @@ def _normalize_base_url(value: str) -> str:
 def describe_fallbacks(settings: Settings) -> list[str]:
     """フェイルオーバーで動いている機能の説明（起動時にログへ出す。値そのものは含めない）"""
     notes: list[str] = []
-    if settings.uses_memory_store:
-        notes.append("DATABASE_URL が未設定のため、メモリ上のストア（モック記事）で動きます")
+    if settings.effective_data_backend == "memory":
+        notes.append(
+            "DATA_BACKEND=memory のため、DB の代わりにメモリ上のストア（モック記事）で動きます"
+        )
     if settings.admin_secret is None:
         notes.append("ADMIN_SECRET が未設定のため、管理 API は使えません")
     if settings.effective_email_provider is None:
@@ -183,9 +197,6 @@ RSS_ACCEPT: Final = "application/rss+xml, application/atom+xml, application/xml,
 # Google アラートの RSS は言語・地域を返さないため、取り込み時はこの値を入れる
 RSS_DEFAULT_LANGUAGE: Final = "ja"
 RSS_DEFAULT_REGION: Final = "jp"
-
-# DATABASE_URL が無いときのメモリ上のストアに、モック記事を入れ直す間隔（分）
-MEMORY_STORE_RESEED_MINUTES: Final = 60
 
 ADMIN_AUTH_SCHEME: Final = "Bearer"
 ADMIN_PATH_PREFIX: Final = f"{API_PREFIX}/admin"

@@ -182,7 +182,22 @@ npm run lint && npm test && ruff check . && ruff format --check . && mypy backen
 - リポジトリを Vercel にインポートすると、`vercel.json` に従ってフロントを `vite build` で静的配信し、`/api/*` を `api/index.py`（Python Function）にルーティングします。
 - Environment Variables に `DATABASE_URL`・`ADMIN_SECRET`・`RESEND_API_KEY`・`EMAIL_FROM`（必要に応じて `NEWS_PROVIDER` など）を設定します。`VITE_` 接頭辞は付けません。
 - `APP_BASE_URL` は通常不要です（Vercel が入れる `VERCEL_PROJECT_PRODUCTION_URL` から本番 URL を作ります）。独自ドメインを使うなど本番 URL が別のときだけ設定します。
-- 足りない環境変数があっても起動は止まりません。`NEWS_PROVIDER=mock` なら DB 無しでモック記事を表示し、メール設定が無ければログインだけが使えなくなります（Functions のログに警告が出ます）。
+- 足りない環境変数があっても起動は止まりません。不足している変数名や無効になった機能は Functions のログに出ます。
 - `EMAIL_PROVIDER=console` は localhost 以外では使われません（ログインリンクをログに出さないため）。
 - `docker/`・`docker-compose.yml` はローカル専用で、`.vercelignore` でアップロード対象から外しています。本番の DB は Supabase（Supavisor の Transaction mode、ポート 6543、ユーザーは `tailor_stream_app`）です。
+
+### Supabase・Resend を用意する前のデプロイ（モック）
+
+`NEWS_PROVIDER=mock`（既定）なら、Environment Variables を何も設定しなくても画面と API が動きます。
+
+| 変数 | 未設定のとき |
+|---|---|
+| `DATABASE_URL` / `DATA_BACKEND` | `memory`（DB を使わずメモリ上のストア） |
+| `EMAIL_PROVIDER` | 送れる手段が無いのでログインだけ 503（`noop` を明示すると送らずに成功扱い） |
+| `ADMIN_SECRET` | 管理 API（`/api/admin/*`）が 503 |
+| `APP_BASE_URL` | `https://$VERCEL_PROJECT_PRODUCTION_URL` |
+
+- カテゴリはシードと同じもの、記事は起動後の最初のアクセスで `NEWS_PROVIDER=mock` のサンプル記事を取り込んだものが出ます。
+- データは Function のインスタンスのメモリにしか残りません。インスタンスが入れ替わると消え、インスタンス間でも共有されません。
+- Supabase・Resend を用意したら `DATABASE_URL`・`ADMIN_SECRET`・`RESEND_API_KEY`・`EMAIL_FROM` を設定します（`DATA_BACKEND`・`EMAIL_PROVIDER` は自動で postgres・resend になります）。
 - デプロイ後、`https://<deployment>/api/health` が `{"status":"ok",...}` を返すことを確認します。

@@ -9,10 +9,11 @@ from fastapi.testclient import TestClient
 from backend.app import create_app
 from backend.auth.dependencies import get_email_sender
 from backend.config import DEFAULT_APP_BASE_URL, Settings, SettingsError, get_settings
-from backend.repositories import memory
+from backend.routes import deps
 from tests.fakes import FakeEmailSender
 
 ENV_NAMES = (
+    "DATA_BACKEND",
     "DATABASE_URL",
     "ADMIN_SECRET",
     "APP_BASE_URL",
@@ -44,7 +45,7 @@ class TestSettings:
     def test_mockなら環境変数が無くても起動できる(self) -> None:
         settings = get_settings()
         assert settings.news_provider == "mock"
-        assert settings.uses_memory_store
+        assert settings.effective_data_backend == "memory"
         assert settings.admin_secret is None
         assert settings.app_base_url == DEFAULT_APP_BASE_URL
         # ローカルなので console にフェイルオーバーする
@@ -96,8 +97,10 @@ class TestSettings:
 
 
 @pytest.fixture
-def fresh_store(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(memory, "_store", None)
+def fresh_store() -> Iterator[None]:
+    deps.reset_memory_store()
+    yield
+    deps.reset_memory_store()
 
 
 def memory_client(settings: Settings, email_sender: FakeEmailSender | None = None) -> TestClient:

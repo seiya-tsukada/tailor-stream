@@ -20,9 +20,12 @@ DbConnection = Connection[DictRow]
 
 
 @contextmanager
-def connect(database_url: str, settings: Settings) -> Iterator[DbConnection]:
+def connect(settings: Settings) -> Iterator[DbConnection]:
+    if settings.database_url is None:
+        # DATA_BACKEND=memory のときは呼ばれない（routes/deps.py で分岐している）
+        raise RuntimeError("DATABASE_URL が未設定のため DB に接続できません")
     conn = Connection.connect(
-        database_url,
+        settings.database_url,
         autocommit=True,
         prepare_threshold=None,
         row_factory=dict_row,
@@ -36,14 +39,7 @@ def connect(database_url: str, settings: Settings) -> Iterator[DbConnection]:
 
 def get_connection(
     settings: Annotated[Settings, Depends(get_settings)],
-) -> Iterator[DbConnection | None]:
-    """FastAPI の依存関数。リクエストごとに接続を開き、終わったら閉じる
-
-    DATABASE_URL が無い（NEWS_PROVIDER=mock のときだけ許される）なら None を返し、
-    repositories はメモリ上のストアを使う（routes/deps.py）。
-    """
-    if settings.database_url is None:
-        yield None
-        return
-    with connect(settings.database_url, settings) as conn:
+) -> Iterator[DbConnection]:
+    """FastAPI の依存関数。リクエストごとに接続を開き、終わったら閉じる"""
+    with connect(settings) as conn:
         yield conn

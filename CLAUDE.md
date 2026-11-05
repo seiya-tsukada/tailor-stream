@@ -25,9 +25,10 @@ tailor-stream は、ユーザーが選んだカテゴリ（最大3つ）のニ�
 - `backend/config.py`: pydantic-settings で環境変数を読む（必須値が無ければ起動時にエラー）。固定の定数・エラーメッセージもここ
 - `backend/db.py`: psycopg 3。`prepare_threshold=None` を必ず指定し、リクエスト単位で接続する（プールを使う場合も max 2 以下）
 - `backend/models.py`: API の入出力（pydantic）。JSON はキャメルケース
-- `backend/repositories/`: SQL はここだけに書く。ユーザーデータを扱う関数は `user_id` を必須引数にする
+- `backend/repositories/`: SQL はここだけに書く。ユーザーデータを扱う関数は `user_id` を必須引数にする。
+  `memory.py` は DB を使わないモック実装（`DATA_BACKEND=memory`）。Protocol を変えたらこちらも合わせる
 - `backend/auth/`: マジックリンク認証（トークン・セッション・`get_current_user` / `get_optional_user`・Origin チェック）
-- `backend/email/`: `EmailSender` プロトコル + console（ローカル開発のみ）/ resend
+- `backend/email/`: `EmailSender` プロトコル + console（ローカル開発のみ）/ resend / noop（送らないモック）
 - `backend/feed/`: URL 正規化・記事 ID・サニタイズ・`NewsProvider` プロトコルと実装
 - `backend/ingestion/`: 取得 → 正規化 → upsert → `ingestion_runs` 記録
 - `backend/routes/`: ルーター。依存関数は `routes/deps.py`（テストでは `dependency_overrides` でフェイクに差し替える）

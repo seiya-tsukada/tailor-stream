@@ -68,24 +68,26 @@
 
 ```
 NEWS_PROVIDER=mock        # mock | google_alerts_rss
+DATA_BACKEND=             # 任意。postgres | memory（未設定なら DATABASE_URL の有無で決める）
 DATABASE_URL=...          # mock 以外は必須。tailor_stream_app で Transaction mode（6543）に接続
 ADMIN_SECRET=...          # mock 以外は必須（16文字以上）。/api/admin/* の Bearer トークン
 GOOGLE_ALERTS_FEEDS={...} # カテゴリ ID → RSS URL（JSON）。未設定のカテゴリはスキップ
 ARTICLE_TTL_HOURS=48      # articles.expires_at = published_at + この時間
 APP_BASE_URL=...          # 任意。フロントの URL（ログインリンク・Origin チェック・Cookie の Secure 判定）
 SESSION_TTL_DAYS=30       # セッションの有効期限
-EMAIL_PROVIDER=           # 任意。console（ローカル開発のみ）| resend（RESEND_API_KEY・EMAIL_FROM が必要）
+EMAIL_PROVIDER=           # 任意。console（ローカル開発のみ）| resend（RESEND_API_KEY・EMAIL_FROM が必要）| noop（送らないモック）
 ```
 
 環境変数が足りないときのフェイルオーバー（起動は止めず、足りない機能だけを無効にする。起動時にログへ警告を出す）:
 
 - `APP_BASE_URL` 未設定: Vercel のシステム環境変数 `VERCEL_PROJECT_PRODUCTION_URL` から `https://<本番ドメイン>` を使う。それも無ければ `http://localhost:5173`。
   リクエストの Host ヘッダからは作らない（ログインリンクの差し替えを防ぐため）。
-- `NEWS_PROVIDER=mock` で `DATABASE_URL` 未設定: メモリ上のストアで動く。カテゴリはシード、記事はモックプロバイダの記事（60分ごとに入れ直す）。
+- `NEWS_PROVIDER=mock` で `DATABASE_URL` 未設定（または `DATA_BACKEND=memory`）: メモリ上のストアで動く。カテゴリはシード、記事は最初のアクセスで取り込むモックプロバイダの記事。
   ユーザーデータはプロセス内にだけ持つ（再起動・別インスタンスで消える）。
 - `ADMIN_SECRET` 未設定（mock のみ）: `/api/admin/*` は 503（`ADMIN_UNAVAILABLE`）。
 - メール送信: `EMAIL_PROVIDER` 未設定なら resend（キーがそろっていれば）→ console（ローカルのみ）の順に選ぶ。
   使えるものが無ければ `POST /api/auth/login-link` は 503（`LOGIN_UNAVAILABLE`）。ほかの API はそのまま使える。
+  `noop`（送らずに成功扱い。リンクもログに出さない）は明示したときだけ使う。
 - mock 以外で `DATABASE_URL`・`ADMIN_SECRET` が無いなど設定が不正なときは、各 API が 503（`SERVICE_UNAVAILABLE`）を返し、不足している変数名をログに出す。
 
 ## 4. データモデル（Supabase / PostgreSQL）
