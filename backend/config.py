@@ -12,15 +12,21 @@ from pydantic import Field, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 NewsProviderName = Literal["mock", "google_alerts_rss"]
-EmailProviderName = Literal["console", "resend"]
+EmailProviderName = Literal["console", "resend", "noop"]
+DataBackendName = Literal["postgres", "memory"]
 LOCAL_HOSTS: Final = frozenset({"localhost", "127.0.0.1", "::1"})
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # データの保存先: postgres（Supabase / ローカルの Postgres）| memory（DB を使わないモック）
+    # memory はプロセス内のメモリに置くだけで、再起動・インスタンスをまたいで残らない
+    data_backend: DataBackendName = "postgres"
+    # DATA_BACKEND=postgres のとき必須
+    database_url: str | None = None
+
     # 必須（未設定なら起動時にエラー）
-    database_url: str = Field(min_length=1)
     admin_secret: str = Field(min_length=16)
     # フロントの URL（例: https://tailor-stream.vercel.app）。ログインリンクと Origin チェックに使う
     app_base_url: str = Field(min_length=1)
@@ -38,6 +44,12 @@ class Settings(BaseSettings):
     resend_api_key: str | None = None
     email_from: str | None = None
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _empty_database_url_to_none(cls, value: object) -> object:
+        # .env の「DATABASE_URL=」（空）は未設定として扱う
+        return None if value == "" else value
+
     @field_validator("app_base_url")
     @classmethod
     def _validate_app_base_url(cls, value: str) -> str:
@@ -46,6 +58,12 @@ class Settings(BaseSettings):
             raise ValueError("APP_BASE_URL は http(s)://ホスト 形式で指定してください")
         # Origin ヘッダと比較するため、スキーム + ホスト[:ポート] だけに揃える
         return f"{parts.scheme}://{parts.netloc}"
+
+    @model_validator(mode="after")
+    def _validate_data_backend(self) -> Self:
+        if self.data_backend == "postgres" and not self.database_url:
+            raise ValueError("DATA_BACKEND=postgres には DATABASE_URL が必要です")
+        return self
 
     @model_validator(mode="after")
     def _validate_email_provider(self) -> Self:

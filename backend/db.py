@@ -21,6 +21,9 @@ DbConnection = Connection[DictRow]
 
 @contextmanager
 def connect(settings: Settings) -> Iterator[DbConnection]:
+    if settings.database_url is None:
+        # DATA_BACKEND=memory のときは呼ばれない（routes/deps.py で分岐している）
+        raise RuntimeError("DATABASE_URL が未設定のため DB に接続できません")
     conn = Connection.connect(
         settings.database_url,
         autocommit=True,

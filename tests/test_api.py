@@ -1,6 +1,6 @@
 """API のテスト（repositories・プロバイダはフェイク。DB には接続しない）"""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -109,7 +109,8 @@ class TestAdminIngest:
         news_provider: FakeNewsProvider,
         article_repo: FakeArticleRepository,
     ) -> None:
-        news_provider.articles["ai"] = [fetched("https://example.com/1")]
+        # 管理 API の取り込みは実時刻で掲載期限を判定するので、公開時刻も実時刻を基準にする
+        news_provider.articles["ai"] = [fetched("https://example.com/1", now=datetime.now(UTC))]
 
         response = client.post("/api/admin/ingest", headers=ADMIN_HEADERS)
 
@@ -189,12 +190,13 @@ def test_必須の環境変数が無ければSettingsErrorに変数名が出る(
     monkeypatch: pytest.MonkeyPatch, tmp_path: object
 ) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("DATA_BACKEND", raising=False)
     monkeypatch.delenv("ADMIN_SECRET", raising=False)
     monkeypatch.delenv("APP_BASE_URL", raising=False)
     monkeypatch.chdir(tmp_path)  # type: ignore[arg-type]  # リポジトリの .env を読ませない
     get_settings.cache_clear()
     try:
-        with pytest.raises(SettingsError, match="ADMIN_SECRET, APP_BASE_URL, DATABASE_URL"):
+        with pytest.raises(SettingsError, match="ADMIN_SECRET, APP_BASE_URL"):
             get_settings()
     finally:
         get_settings.cache_clear()
