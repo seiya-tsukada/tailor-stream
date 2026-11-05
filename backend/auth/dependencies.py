@@ -20,7 +20,7 @@ from backend.routes.deps import (
 )
 
 
-def get_email_sender(settings: SettingsDep) -> Iterator[EmailSender]:
+def get_email_sender(settings: SettingsDep) -> Iterator[EmailSender | None]:
     with httpx.Client() as client:
         yield create_email_sender(settings, client)
 
@@ -30,7 +30,7 @@ def get_auth_service(
     login_tokens: LoginTokenRepositoryDep,
     users: UserRepositoryDep,
     sessions: SessionRepositoryDep,
-    email_sender: Annotated[EmailSender, Depends(get_email_sender)],
+    email_sender: Annotated[EmailSender | None, Depends(get_email_sender)],
 ) -> AuthService:
     return AuthService(
         login_tokens,
@@ -63,7 +63,7 @@ CurrentUserDep = Annotated[User, Depends(get_current_user)]
 
 
 def verify_origin(request: Request, settings: SettingsDep) -> None:
-    """CSRF 対策: GET 以外は Origin が APP_BASE_URL と一致しなければ 403
+    """CSRF 対策: GET 以外は Origin がフロントの URL（Settings.app_base_url）と一致しなければ 403
 
     /api/admin/* は Cookie を使わず Bearer トークンで守るため対象外（curl などから呼べるように）。
     """

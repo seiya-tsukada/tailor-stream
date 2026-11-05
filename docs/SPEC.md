@@ -67,15 +67,26 @@
 - API の型は FastAPI の OpenAPI から `npm run gen:api` で `src/api/schema.d.ts` を生成する（生成物はコミットする）。
 
 ```
-DATABASE_URL=...          # 必須。tailor_stream_app で Transaction mode（6543）に接続
-ADMIN_SECRET=...          # 必須。/api/admin/* の Bearer トークン
 NEWS_PROVIDER=mock        # mock | google_alerts_rss
+DATABASE_URL=...          # mock 以外は必須。tailor_stream_app で Transaction mode（6543）に接続
+ADMIN_SECRET=...          # mock 以外は必須（16文字以上）。/api/admin/* の Bearer トークン
 GOOGLE_ALERTS_FEEDS={...} # カテゴリ ID → RSS URL（JSON）。未設定のカテゴリはスキップ
 ARTICLE_TTL_HOURS=48      # articles.expires_at = published_at + この時間
-APP_BASE_URL=...          # 必須。フロントの URL（ログインリンク・Origin チェック・Cookie の Secure 判定）
+APP_BASE_URL=...          # 任意。フロントの URL（ログインリンク・Origin チェック・Cookie の Secure 判定）
 SESSION_TTL_DAYS=30       # セッションの有効期限
-EMAIL_PROVIDER=console    # console（ローカル開発のみ）| resend（RESEND_API_KEY・EMAIL_FROM が必要）
+EMAIL_PROVIDER=           # 任意。console（ローカル開発のみ）| resend（RESEND_API_KEY・EMAIL_FROM が必要）
 ```
+
+環境変数が足りないときのフェイルオーバー（起動は止めず、足りない機能だけを無効にする。起動時にログへ警告を出す）:
+
+- `APP_BASE_URL` 未設定: Vercel のシステム環境変数 `VERCEL_PROJECT_PRODUCTION_URL` から `https://<本番ドメイン>` を使う。それも無ければ `http://localhost:5173`。
+  リクエストの Host ヘッダからは作らない（ログインリンクの差し替えを防ぐため）。
+- `NEWS_PROVIDER=mock` で `DATABASE_URL` 未設定: メモリ上のストアで動く。カテゴリはシード、記事はモックプロバイダの記事（60分ごとに入れ直す）。
+  ユーザーデータはプロセス内にだけ持つ（再起動・別インスタンスで消える）。
+- `ADMIN_SECRET` 未設定（mock のみ）: `/api/admin/*` は 503（`ADMIN_UNAVAILABLE`）。
+- メール送信: `EMAIL_PROVIDER` 未設定なら resend（キーがそろっていれば）→ console（ローカルのみ）の順に選ぶ。
+  使えるものが無ければ `POST /api/auth/login-link` は 503（`LOGIN_UNAVAILABLE`）。ほかの API はそのまま使える。
+- mock 以外で `DATABASE_URL`・`ADMIN_SECRET` が無いなど設定が不正なときは、各 API が 503（`SERVICE_UNAVAILABLE`）を返し、不足している変数名をログに出す。
 
 ## 4. データモデル（Supabase / PostgreSQL）
 
@@ -163,14 +174,14 @@ score = w_share  * log1p(share_count ?? 0)
 - `POST /api/auth/verify { token }`: リンクスキャナーの GET で消費されないよう、検証はフロントからの POST で行う。1文の UPDATE で原子的に消費し、`users` を upsert、セッションを作成。
 - セッション: Cookie `ts_session`（HttpOnly、本番は Secure、SameSite=Lax、Path=/）。DB には SHA-256 のみ保存。有効期限 `SESSION_TTL_DAYS`（既定 30 日）。
 - `POST /api/auth/logout`、`GET /api/me`。
-- CSRF 対策: GET 以外のリクエストは Origin ヘッダが `APP_BASE_URL` と一致しなければ 403（`/api/admin/*` を除く）。
-- メール送信: `EmailSender` プロトコル。`EMAIL_PROVIDER=console | resend`。
+- CSRF 対策: GET 以外のリクエストは Origin ヘッダがフロントの URL（`APP_BASE_URL`、未設定なら §3 のフェイルオーバー）と一致しなければ 403（`/api/admin/*` を除く）。
+- メール送信: `EmailSender` プロトコル。`EMAIL_PROVIDER=console | resend`（未設定なら自動で選ぶ。§3）。
 - ログインは任意。API ごとの扱い:
   - ログイン不要: `/api/health`、`/api/categories`、`/api/auth/*`
   - ログイン任意: `GET /api/feed`（ログイン中はユーザーの選択カテゴリ、未ログインはクエリ `?categories=` を使う。未選択なら空の一覧）
   - ログイン必須（未ログインは 401）: `/api/me`、`/api/me/categories`（以後の保存・ピン留めなどユーザーデータの API も同様）
   - `/api/admin/*` は `ADMIN_SECRET` の Bearer トークン（Cookie を使わないため Origin チェックの対象外）
-- `EMAIL_PROVIDER=console`（ログインリンクをログに出す）はローカル開発（`APP_BASE_URL` が localhost）でのみ使える。
+- console（ログインリンクをログに出す）はローカル開発（フロントの URL が localhost）でのみ使う。それ以外で指定しても使わず、ログイン機能を無効にする。
 
 ### 課金
 

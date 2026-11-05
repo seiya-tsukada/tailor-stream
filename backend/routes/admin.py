@@ -18,7 +18,11 @@ router = APIRouter(
     prefix="/admin",
     tags=["admin"],
     dependencies=[Depends(require_admin)],
-    responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    responses={
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
 )
 
 

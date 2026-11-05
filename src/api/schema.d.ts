@@ -228,7 +228,7 @@ export interface components {
          * ErrorCode
          * @enum {string}
          */
-        ErrorCode: "VALIDATION_ERROR" | "TOO_MANY_CATEGORIES" | "CATEGORY_NOT_FOUND" | "UNAUTHORIZED" | "FORBIDDEN_ORIGIN" | "INVALID_EMAIL" | "RATE_LIMITED" | "INVALID_TOKEN" | "NOT_FOUND" | "INTERNAL_ERROR" | "SERVICE_UNAVAILABLE";
+        ErrorCode: "VALIDATION_ERROR" | "TOO_MANY_CATEGORIES" | "CATEGORY_NOT_FOUND" | "UNAUTHORIZED" | "FORBIDDEN_ORIGIN" | "INVALID_EMAIL" | "RATE_LIMITED" | "INVALID_TOKEN" | "NOT_FOUND" | "INTERNAL_ERROR" | "SERVICE_UNAVAILABLE" | "LOGIN_UNAVAILABLE" | "ADMIN_UNAVAILABLE";
         /** ErrorResponse */
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
@@ -540,6 +540,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     verify_api_auth_verify_post: {
@@ -609,6 +618,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     logout_api_auth_logout_post: {
@@ -667,6 +685,15 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -916,6 +943,15 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

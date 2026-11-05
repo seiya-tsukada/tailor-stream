@@ -109,13 +109,14 @@ def fetched(
     snippet: str | None = None,
     hours_ago: float = 1.0,
     share_count: int | None = None,
+    now: datetime = FIXED_NOW,
 ) -> FetchedArticle:
     return FetchedArticle(
         url=url,
         title=title,
         snippet=snippet,
         source_name=None,
-        published_at=FIXED_NOW - timedelta(hours=hours_ago),
+        published_at=now - timedelta(hours=hours_ago),
         language="ja",
         share_count=share_count,
     )

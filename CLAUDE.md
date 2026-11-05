@@ -7,7 +7,7 @@ tailor-stream は、ユーザーが選んだカテゴリ（最大3つ）のニ�
 
 - 仕様の正は `docs/SPEC.md`。このファイルや README と食い違う場合は SPEC.md に従う。
 - DB スキーマの正は `supabase/migrations/20261027000000_tailor_stream_schema.sql`。
-- 作業は PR 単位で進める（1PR＝1ブランチ）。
+- 作業は PR 単位で進める（1PR＝1ブランチ）。PR の動作確認はローカルの `docker compose up --build` で行う（README の「開発フロー」）。
 
 ## 技術スタック
 
@@ -15,6 +15,7 @@ tailor-stream は、ユーザーが選んだカテゴリ（最大3つ）のニ�
 - バックエンド: Python 3.12 + FastAPI（`backend/`）。DB 操作・認証・記事取得・決済など責任を伴う処理はすべて Python で行う
 - DB: Supabase を Postgres ホスティングとしてのみ使う（Supabase Auth / Data API / RLS / supabase-js は使わない）。
   全テーブルは `tailor_stream` スキーマ。アプリは専用ロール `tailor_stream_app` で Supavisor の Transaction mode（6543）に接続する
+- 環境は dev（ローカルの docker compose）と production（Vercel、`main` のみデプロイ）の2つ。Preview デプロイは使わない
 - ホスティング: Vercel。フロントは静的ビルド、`/api/*` は `api/index.py`（Python Function）にルーティング（`vercel.json`）
 - テスト: フロントは vitest（対象ファイルと同じ場所に `*.test.ts`）、バックエンドは pytest（`tests/`）
 
@@ -36,7 +37,8 @@ tailor-stream は、ユーザーが選んだカテゴリ（最大3つ）のニ�
 
 - ログインは任意。未ログインでもカテゴリ選択と記事一覧は使える。ユーザーデータの API はログイン必須（`CurrentUserDep`）、
   ログインの有無で振る舞いが変わる API は `OptionalUserDep` を使う
-- GET 以外は Origin が `APP_BASE_URL` と一致しないと 403（`/api/admin/*` は Bearer で守るため対象外）
+- GET 以外は Origin がフロントの URL（`Settings.app_base_url`）と一致しないと 403（`/api/admin/*` は Bearer で守るため対象外）
+- 環境変数が足りないときは起動を止めず、足りない機能だけ無効にする（`NEWS_PROVIDER=mock` なら DB 無しでメモリ上のストア。詳細は SPEC.md §3）
 - トークン・セッションは DB に SHA-256 だけを保存する。トークンやセッション Cookie をログ・レスポンス本文に出さない
 
 ## 型の共有
@@ -71,7 +73,9 @@ tailor-stream は、ユーザーが選んだカテゴリ（最大3つ）のニ�
 
 ## ローカル開発
 
-- `uvicorn backend.app:app --reload --port 8000` と `npm run dev`（Vite）を並行起動する。Vite が `/api` を `http://127.0.0.1:8000` に転送する
+- `docker compose up --build` で db（Postgres。Supabase の代わり。データはボリューム `tailor-stream_db-data`）・api・frontend（http://localhost:5180）をまとめて起動できる。
+  メールは console 固定で送らない。`docker-compose.yml` と `docker/` はローカル専用（`.vercelignore` で除外）
+- Docker を使わない場合は `uvicorn backend.app:app --reload --port 8000` と `npm run dev`（Vite）を並行起動する。Vite が `/api` を `http://127.0.0.1:8000` に転送する
 - 環境変数はリポジトリ直下の `.env`（gitignore 済み）から読む。項目を増やしたら `.env.example` も更新する
 
 ## 作業の完了条件
