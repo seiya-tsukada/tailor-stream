@@ -1,0 +1,4 @@
+# ローカル開発（docker compose）専用のファイルは Vercel にアップロードしない
+docker/
+docker-compose.yml
+.dockerignore

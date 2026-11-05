@@ -16,7 +16,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.auth import router as auth_router
 from backend.auth.dependencies import verify_origin
-from backend.config import API_PREFIX, ERROR_MESSAGES, SettingsError, get_settings
+from backend.config import (
+    API_PREFIX,
+    ERROR_MESSAGES,
+    SettingsError,
+    describe_fallbacks,
+    get_settings,
+)
 from backend.errors import AppError, ErrorCode
 from backend.models import ErrorBody, ErrorResponse
 from backend.routes import admin, categories, feed, health, me
@@ -63,8 +69,15 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> JSONRespo
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    # 必須の環境変数が無ければ起動時に止める（SettingsError のメッセージに不足している変数名が出る）
-    get_settings()
+    # 環境変数が不正でも起動は止めない（止めると Vercel の汎用エラーになり原因が分からない）。
+    # 各リクエストで SettingsError → 503 になり、不足している変数名はログに出る
+    try:
+        settings = get_settings()
+    except SettingsError as err:
+        logger.error("%s", err)
+    else:
+        for note in describe_fallbacks(settings):
+            logger.warning("%s", note)
     yield
 
 

@@ -15,24 +15,32 @@ NewsProviderName = Literal["mock", "google_alerts_rss"]
 EmailProviderName = Literal["console", "resend", "noop"]
 DataBackendName = Literal["postgres", "memory"]
 LOCAL_HOSTS: Final = frozenset({"localhost", "127.0.0.1", "::1"})
+# APP_BASE_URL も VERCEL_PROJECT_PRODUCTION_URL も無いときのフロントの URL（Vite の既定ポート）
+DEFAULT_APP_BASE_URL: Final = "http://localhost:5173"
+ADMIN_SECRET_MIN_LENGTH: Final = 16
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # データの保存先: postgres（Supabase / ローカルの Postgres）| memory（DB を使わないモック）
-    # memory はプロセス内のメモリに置くだけで、再起動・インスタンスをまたいで残らない
-    data_backend: DataBackendName = "postgres"
-    # DATA_BACKEND=postgres のとき必須
-    database_url: str | None = None
+    # 記事の取得元。mock のときは DATABASE_URL・ADMIN_SECRET・メール設定が無くても動く（下記のフェイルオーバー）
+    news_provider: NewsProviderName = "mock"
 
-    # 必須（未設定なら起動時にエラー）
-    admin_secret: str = Field(min_length=16)
-    # フロントの URL（例: https://tailor-stream.vercel.app）。ログインリンクと Origin チェックに使う
-    app_base_url: str = Field(min_length=1)
+    # データの保存先: postgres | memory（DB を使わないモック。プロセス内のメモリにだけ置く）
+    # 未設定なら DATABASE_URL があれば postgres、無ければ memory（mock のときだけ。effective_data_backend）
+    data_backend: DataBackendName | None = None
+    # DATA_BACKEND=postgres と、mock 以外では必須
+    database_url: str | None = Field(default=None, min_length=1)
+    # mock 以外では必須。未設定なら管理 API（/api/admin/*）は 503
+    admin_secret: str | None = Field(default=None, min_length=ADMIN_SECRET_MIN_LENGTH)
+
+    # フロントの URL（例: https://tailor-stream.vercel.app）。ログインリンクと Origin チェックに使う。
+    # 未設定なら Vercel の本番 URL（VERCEL_PROJECT_PRODUCTION_URL）、それも無ければ DEFAULT_APP_BASE_URL
+    app_base_url: str = ""
+    # Vercel が実行時に自動で入れるシステム環境変数（本番ドメイン。スキーム無し）
+    vercel_project_production_url: str | None = None
 
     # 任意
-    news_provider: NewsProviderName = "mock"
     # カテゴリ ID → Google アラートの RSS URL（JSON）。未設定のカテゴリは取り込みをスキップする
     google_alerts_feeds: dict[str, str] = Field(default_factory=dict)
     article_ttl_hours: int = Field(default=48, gt=0)
@@ -40,49 +48,112 @@ class Settings(BaseSettings):
     rss_user_agent: str = "Mozilla/5.0 (compatible; TailorStreamBot/0.1)"
     db_connect_timeout_seconds: int = Field(default=10, gt=0)
     session_ttl_days: int = Field(default=30, gt=0)
-    email_provider: EmailProviderName = "console"
+    # 未設定なら自動で選ぶ（effective_email_provider を参照）
+    email_provider: EmailProviderName | None = None
     resend_api_key: str | None = None
     email_from: str | None = None
 
-    @field_validator("database_url", mode="before")
+    @field_validator(
+        "data_backend",
+        "database_url",
+        "admin_secret",
+        "email_provider",
+        "resend_api_key",
+        "email_from",
+        "vercel_project_production_url",
+        mode="before",
+    )
     @classmethod
-    def _empty_database_url_to_none(cls, value: object) -> object:
-        # .env の「DATABASE_URL=」（空）は未設定として扱う
-        return None if value == "" else value
-
-    @field_validator("app_base_url")
-    @classmethod
-    def _validate_app_base_url(cls, value: str) -> str:
-        parts = urlsplit(value)
-        if parts.scheme not in ("http", "https") or not parts.netloc:
-            raise ValueError("APP_BASE_URL は http(s)://ホスト 形式で指定してください")
-        # Origin ヘッダと比較するため、スキーム + ホスト[:ポート] だけに揃える
-        return f"{parts.scheme}://{parts.netloc}"
+    def _empty_to_none(cls, value: object) -> object:
+        # .env の「DATABASE_URL=」のような空値は未設定として扱う
+        return None if isinstance(value, str) and not value.strip() else value
 
     @model_validator(mode="after")
-    def _validate_data_backend(self) -> Self:
-        if self.data_backend == "postgres" and not self.database_url:
+    def _resolve(self) -> Self:
+        self.app_base_url = _normalize_base_url(self._raw_app_base_url())
+        if self.data_backend == "postgres" and self.database_url is None:
             raise ValueError("DATA_BACKEND=postgres には DATABASE_URL が必要です")
+        if self.news_provider != "mock":
+            missing = [
+                name
+                for name, value in (
+                    ("DATABASE_URL", self.database_url),
+                    ("ADMIN_SECRET", self.admin_secret),
+                )
+                if value is None
+            ]
+            if missing:
+                raise ValueError(
+                    f"NEWS_PROVIDER={self.news_provider} には {', '.join(missing)} が必要です"
+                )
         return self
 
-    @model_validator(mode="after")
-    def _validate_email_provider(self) -> Self:
-        if self.email_provider == "resend" and not (self.resend_api_key and self.email_from):
-            raise ValueError("EMAIL_PROVIDER=resend には RESEND_API_KEY と EMAIL_FROM が必要です")
-        # console はログインリンク（秘密）をログに出すため、ローカル開発でしか使わせない
-        if (
-            self.email_provider == "console"
-            and urlsplit(self.app_base_url).hostname not in LOCAL_HOSTS
-        ):
-            raise ValueError(
-                "EMAIL_PROVIDER=console はローカル開発（APP_BASE_URL が localhost）でのみ使えます"
-            )
-        return self
+    def _raw_app_base_url(self) -> str:
+        if self.app_base_url.strip():
+            return self.app_base_url.strip()
+        if self.vercel_project_production_url:
+            return f"https://{self.vercel_project_production_url}"
+        return DEFAULT_APP_BASE_URL
+
+    @property
+    def is_local(self) -> bool:
+        return urlsplit(self.app_base_url).hostname in LOCAL_HOSTS
+
+    @property
+    def effective_data_backend(self) -> DataBackendName:
+        """DATA_BACKEND が未設定なら、DATABASE_URL の有無で決める（無いのは mock のときだけ許される）"""
+        if self.data_backend is not None:
+            return self.data_backend
+        return "postgres" if self.database_url is not None else "memory"
+
+    @property
+    def effective_email_provider(self) -> EmailProviderName | None:
+        """実際に使うメール送信の実装。None ならログインリンクを送れない（ログイン機能は 503）
+
+        - resend: RESEND_API_KEY と EMAIL_FROM がそろっているときだけ
+        - console: ログインリンク（秘密）をログに出すため、ローカル開発（APP_BASE_URL が localhost）でだけ
+        - noop: 明示したときだけ（送らずに成功扱いにするモック。本番でも使える）
+        - EMAIL_PROVIDER が未設定なら resend → console の順に使えるものを選ぶ
+        """
+        if self.email_provider == "noop":
+            return "noop"
+        resend_ready = self.resend_api_key is not None and self.email_from is not None
+        candidates: tuple[EmailProviderName, ...] = (
+            (self.email_provider,) if self.email_provider else ("resend", "console")
+        )
+        for candidate in candidates:
+            if candidate == "resend" and resend_ready:
+                return "resend"
+            if candidate == "console" and self.is_local:
+                return "console"
+        return None
 
     @property
     def cookie_secure(self) -> bool:
         """本番（https）では Cookie に Secure を付ける"""
         return self.app_base_url.startswith("https://")
+
+
+def _normalize_base_url(value: str) -> str:
+    parts = urlsplit(value)
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        raise ValueError("APP_BASE_URL は http(s)://ホスト 形式で指定してください")
+    # Origin ヘッダと比較するため、スキーム + ホスト[:ポート] だけに揃える
+    return f"{parts.scheme}://{parts.netloc}"
+
+
+def describe_fallbacks(settings: Settings) -> list[str]:
+    """フェイルオーバーで動いている機能の説明（起動時にログへ出す。値そのものは含めない）"""
+    notes: list[str] = []
+    if settings.effective_data_backend == "memory":
+        notes.append(
+            "DATA_BACKEND=memory のため、DB の代わりにメモリ上のストア（モック記事）で動きます"
+        )
+    if settings.admin_secret is None:
+        notes.append("ADMIN_SECRET が未設定のため、管理 API は使えません")
+    if settings.effective_email_provider is None:
+        notes.append("メール送信の設定が無いため、ログイン機能は使えません")
+    return notes
 
 
 class SettingsError(RuntimeError):
@@ -177,4 +248,6 @@ ERROR_MESSAGES: Final[dict[str, str]] = {
     "NOT_FOUND": "見つかりません",
     "INTERNAL_ERROR": "サーバーでエラーが発生しました",
     "SERVICE_UNAVAILABLE": "サーバーの設定に問題があります",
+    "LOGIN_UNAVAILABLE": "現在ログイン機能は利用できません",
+    "ADMIN_UNAVAILABLE": "管理 API は設定されていません",
 }

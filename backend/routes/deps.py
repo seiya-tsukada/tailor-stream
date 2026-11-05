@@ -59,7 +59,7 @@ def reset_memory_store() -> None:
 
 def get_optional_connection(settings: SettingsDep) -> Iterator[DbConnection | None]:
     """DATA_BACKEND=postgres ならリクエスト単位の DB 接続、memory なら None（接続しない）"""
-    if settings.data_backend == "memory":
+    if settings.effective_data_backend == "memory":
         yield None
         return
     yield from get_connection(settings)
@@ -123,7 +123,9 @@ def require_admin(
     settings: SettingsDep,
     authorization: Annotated[str | None, Header()] = None,
 ) -> None:
-    """Authorization: Bearer <ADMIN_SECRET> を定数時間比較で検証する"""
+    """Authorization: Bearer <ADMIN_SECRET> を定数時間比較で検証する（ADMIN_SECRET が無ければ 503）"""
+    if settings.admin_secret is None:
+        raise AppError(503, ErrorCode.ADMIN_UNAVAILABLE)
     scheme, _, token = (authorization or "").partition(" ")
     if scheme != ADMIN_AUTH_SCHEME or not hmac.compare_digest(
         token.encode("utf-8"), settings.admin_secret.encode("utf-8")

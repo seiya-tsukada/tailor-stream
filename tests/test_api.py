@@ -184,19 +184,3 @@ class TestErrors:
         assert response.status_code == 503
         assert response.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
         assert "DATABASE_URL" in caplog.text
-
-
-def test_必須の環境変数が無ければSettingsErrorに変数名が出る(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: object
-) -> None:
-    monkeypatch.delenv("DATABASE_URL", raising=False)
-    monkeypatch.delenv("DATA_BACKEND", raising=False)
-    monkeypatch.delenv("ADMIN_SECRET", raising=False)
-    monkeypatch.delenv("APP_BASE_URL", raising=False)
-    monkeypatch.chdir(tmp_path)  # type: ignore[arg-type]  # リポジトリの .env を読ませない
-    get_settings.cache_clear()
-    try:
-        with pytest.raises(SettingsError, match="ADMIN_SECRET, APP_BASE_URL"):
-            get_settings()
-    finally:
-        get_settings.cache_clear()

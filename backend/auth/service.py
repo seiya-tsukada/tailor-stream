@@ -41,7 +41,7 @@ class AuthService:
         login_tokens: LoginTokenRepository,
         users: UserRepository,
         sessions: SessionRepository,
-        email_sender: EmailSender,
+        email_sender: EmailSender | None,
         app_base_url: str,
         session_ttl: timedelta,
         now: Callable[[], datetime] | None = None,
@@ -55,7 +55,12 @@ class AuthService:
         self._now = now or (lambda: datetime.now(UTC))
 
     def request_login_link(self, raw_email: str, ip: str | None) -> None:
-        """ログインリンクをメールで送る。登録済みかどうかで結果を変えない（アカウント存在の推測を防ぐ）"""
+        """ログインリンクをメールで送る。登録済みかどうかで結果を変えない（アカウント存在の推測を防ぐ）
+
+        メールを送る手段が設定されていなければ 503（LOGIN_UNAVAILABLE）。
+        """
+        if self._email_sender is None:
+            raise AppError(503, ErrorCode.LOGIN_UNAVAILABLE)
         email = normalize_email(raw_email)
         if email is None:
             raise AppError(422, ErrorCode.INVALID_EMAIL)

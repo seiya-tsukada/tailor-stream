@@ -1,4 +1,4 @@
-"""メール送信（EMAIL_PROVIDER=console | resend | noop で切り替える）"""
+"""メール送信（EMAIL_PROVIDER=console | resend | noop で切り替える。使えるものが無ければ送れない）"""
 
 import logging
 from dataclasses import dataclass
@@ -64,11 +64,15 @@ class ResendEmailSender:
         response.raise_for_status()
 
 
-def create_email_sender(settings: Settings, client: httpx.Client) -> EmailSender:
-    if settings.email_provider == "resend":
-        # Settings の検証で resend のときは両方そろっていることを保証している
+def create_email_sender(settings: Settings, client: httpx.Client) -> EmailSender | None:
+    """設定から送信の実装を作る。送れる手段が無ければ None（ログイン機能は 503 になる）"""
+    provider = settings.effective_email_provider
+    if provider == "resend":
+        # effective_email_provider が resend なら両方そろっている
         assert settings.resend_api_key is not None and settings.email_from is not None  # noqa: S101
         return ResendEmailSender(settings.resend_api_key, settings.email_from, client)
-    if settings.email_provider == "noop":
+    if provider == "noop":
         return NoopEmailSender()
-    return ConsoleEmailSender()
+    if provider == "console":
+        return ConsoleEmailSender()
+    return None

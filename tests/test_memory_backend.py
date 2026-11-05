@@ -35,12 +35,19 @@ class TestSettings:
 
     def test_postgresならDATABASE_URLが必須(self) -> None:
         with pytest.raises(ValidationError, match="DATABASE_URL"):
-            make_settings()
+            make_settings(data_backend="postgres")
 
     def test_空のDATABASE_URLは未設定として扱う(self) -> None:
         with pytest.raises(ValidationError, match="DATABASE_URL"):
-            make_settings(database_url="")
+            make_settings(data_backend="postgres", database_url="")
         assert make_settings(data_backend="memory", database_url="").database_url is None
+
+    def test_未設定ならDATABASE_URLの有無で決まる(self) -> None:
+        assert make_settings().effective_data_backend == "memory"
+        assert (
+            make_settings(database_url="postgresql://x@localhost/x").effective_data_backend
+            == "postgres"
+        )
 
     def test_noopは本番のURLでも使える(self) -> None:
         settings = make_settings(
@@ -49,9 +56,13 @@ class TestSettings:
         with httpx.Client() as client:
             assert isinstance(create_email_sender(settings, client), NoopEmailSender)
 
-    def test_consoleは本番のURLでは使えない(self) -> None:
-        with pytest.raises(ValidationError, match="console"):
-            make_settings(data_backend="memory", app_base_url=PROD_BASE_URL)
+    def test_consoleは本番のURLでは使わない(self) -> None:
+        settings = make_settings(
+            data_backend="memory", email_provider="console", app_base_url=PROD_BASE_URL
+        )
+        assert settings.effective_email_provider is None
+        with httpx.Client() as client:
+            assert create_email_sender(settings, client) is None
 
 
 def test_noopは宛先もログインリンクもログに出さない(caplog: pytest.LogCaptureFixture) -> None:
