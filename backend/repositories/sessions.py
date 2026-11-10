@@ -47,7 +47,7 @@ class PgSessionRepository:
     ) -> None:
         self._conn.execute(
             """
-            insert into sessions (user_id, token_hash, expires_at, user_agent, ip_address)
+            insert into tailor_stream.sessions (user_id, token_hash, expires_at, user_agent, ip_address)
             values (%s, %s, %s, %s, %s)
             """,
             (user_id, token_hash, expires_at, user_agent, ip),
@@ -59,8 +59,8 @@ class PgSessionRepository:
             select
               s.id as session_id, s.last_seen_at,
               u.id, u.email, u.display_name, u.plan, u.plan_expires_at
-            from sessions s
-            join users u on u.id = s.user_id
+            from tailor_stream.sessions s
+            join tailor_stream.users u on u.id = s.user_id
             where s.token_hash = %s and s.revoked_at is null and s.expires_at > now()
             """,
             (token_hash,),
@@ -72,10 +72,12 @@ class PgSessionRepository:
         return ActiveSession(id=session_id, last_seen_at=last_seen_at, user=User(**row))
 
     def touch(self, session_id: UUID) -> None:
-        self._conn.execute("update sessions set last_seen_at = now() where id = %s", (session_id,))
+        self._conn.execute(
+            "update tailor_stream.sessions set last_seen_at = now() where id = %s", (session_id,)
+        )
 
     def revoke(self, token_hash: str) -> None:
         self._conn.execute(
-            "update sessions set revoked_at = now() where token_hash = %s and revoked_at is null",
+            "update tailor_stream.sessions set revoked_at = now() where token_hash = %s and revoked_at is null",
             (token_hash,),
         )

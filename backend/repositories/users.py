@@ -30,7 +30,7 @@ class PgUserRepository:
     def upsert_on_login(self, email: str) -> User:
         row = self._conn.execute(
             """
-            insert into users (email, email_verified_at, last_login_at)
+            insert into tailor_stream.users (email, email_verified_at, last_login_at)
             values (%s, now(), now())
             on conflict (email) do update set
               email_verified_at = coalesce(users.email_verified_at, now()),

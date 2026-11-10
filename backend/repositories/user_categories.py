@@ -33,8 +33,8 @@ class PgUserCategoryRepository:
         rows = self._conn.execute(
             """
             select uc.category_id
-            from user_categories uc
-            join categories c on c.id = uc.category_id
+            from tailor_stream.user_categories uc
+            join tailor_stream.categories c on c.id = uc.category_id
             where uc.user_id = %s and c.is_active
             order by uc.created_at, c.sort_order
             """,
@@ -45,11 +45,13 @@ class PgUserCategoryRepository:
     def replace(self, user_id: UUID, category_ids: list[str]) -> None:
         try:
             with self._conn.transaction(), self._conn.cursor() as cur:
-                cur.execute("delete from user_categories where user_id = %s", (user_id,))
+                cur.execute(
+                    "delete from tailor_stream.user_categories where user_id = %s", (user_id,)
+                )
                 # created_at を選択順にずらして、list_ids で順序を保つ
                 cur.executemany(
                     """
-                    insert into user_categories (user_id, category_id, created_at)
+                    insert into tailor_stream.user_categories (user_id, category_id, created_at)
                     values (%s, %s, now() + make_interval(secs => %s * 0.001))
                     """,
                     [

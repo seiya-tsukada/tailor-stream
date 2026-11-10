@@ -2,8 +2,11 @@
 -- TailorStream 初期スキーマ（docs/SPEC.md §4）
 -- - Supabase は Postgres ホスティングとしてのみ使う（Supabase Auth / Data API / RLS は使わない）
 -- - 全オブジェクトを tailor_stream スキーマに置く
--- - アプリ（Python バックエンド）は専用ロール tailor_stream_app で接続する
--- - tailor_stream スキーマは Supabase の Exposed schemas に追加しないこと
+-- - アプリ（Python バックエンド）は DB のオーナーロール（Supabase の postgres）で接続する。
+--   search_path に頼らず、SQL ではテーブルを必ず tailor_stream.xxx と書く
+-- - tailor_stream スキーマは Supabase の Exposed schemas に追加しないこと。
+--   加えて anon / authenticated などの Data API 用ロールからは権限を外し、RLS をポリシー無しで有効にしておく
+--   （オーナーは RLS の対象外なのでアプリには影響しない。Data API から見えてしまっても読めないようにする保険）
 --
 -- 冪等: すべての文は「無いときだけ作る」（IF NOT EXISTS / 存在チェック）か
 -- 「同じ定義で置き換える」（CREATE OR REPLACE）ので、適用済みの DB に何度流しても変化しない。
@@ -17,18 +20,6 @@
 set client_min_messages = warning;
 
 create schema if not exists tailor_stream;
-
--- アプリ用ロール（ログイン権限とパスワードは SQL Editor で手動設定する。リポジトリに秘密を置かないため）
-do $$
-begin
-  create role tailor_stream_app nologin;
-exception when duplicate_object then
-  null;
-end
-$$;
-
-alter role tailor_stream_app set search_path = tailor_stream;
-alter role tailor_stream_app set statement_timeout = '15s';
 
 -- =============================================================
 -- 共有データ（記事・カテゴリ）
@@ -333,24 +324,40 @@ end;
 $$;
 
 -- =============================================================
--- 権限（アプリ用ロールは tailor_stream のデータ操作のみ。DDL は不可）
+-- 権限（アプリはオーナーロールで接続するので付与は不要。それ以外のロールからは外す）
 -- =============================================================
 
 revoke all on schema tailor_stream from public;
-grant usage on schema tailor_stream to tailor_stream_app;
-
-grant select, insert, update, delete on all tables in schema tailor_stream to tailor_stream_app;
-grant usage, select on all sequences in schema tailor_stream to tailor_stream_app;
-
+revoke all on all tables in schema tailor_stream from public;
+revoke all on all sequences in schema tailor_stream from public;
 revoke execute on all functions in schema tailor_stream from public;
-grant execute on function tailor_stream.cleanup_expired_saves()    to tailor_stream_app;
-grant execute on function tailor_stream.cleanup_expired_articles() to tailor_stream_app;
-grant execute on function tailor_stream.cleanup_expired_auth()     to tailor_stream_app;
+alter default privileges in schema tailor_stream revoke execute on functions from public;
 
--- 今後のマイグレーションで追加するテーブル・シーケンスにも同じ権限を付与する
-alter default privileges in schema tailor_stream
-  grant select, insert, update, delete on tables to tailor_stream_app;
-alter default privileges in schema tailor_stream
-  grant usage, select on sequences to tailor_stream_app;
-alter default privileges in schema tailor_stream
-  revoke execute on functions from public;
+-- Supabase の Data API 用ロール（ローカルの Postgres には無いので、あるときだけ外す）
+do $$
+declare
+  r text;
+begin
+  foreach r in array array['anon', 'authenticated', 'service_role']
+  loop
+    if exists (select 1 from pg_roles where rolname = r) then
+      execute format('revoke all on schema tailor_stream from %I', r);
+      execute format('revoke all on all tables in schema tailor_stream from %I', r);
+      execute format('revoke all on all sequences in schema tailor_stream from %I', r);
+      execute format('revoke all on all functions in schema tailor_stream from %I', r);
+    end if;
+  end loop;
+end
+$$;
+
+-- RLS をポリシー無しで有効にする（オーナー以外は1行も読み書きできない。何度実行しても同じ）
+do $$
+declare
+  t text;
+begin
+  for t in select tablename from pg_tables where schemaname = 'tailor_stream'
+  loop
+    execute format('alter table tailor_stream.%I enable row level security', t);
+  end loop;
+end
+$$;

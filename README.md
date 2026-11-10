@@ -74,7 +74,7 @@ docker compose up --build
 | api | http://localhost:8000/api/docs | FastAPI（`--reload`） |
 | db | `postgresql://postgres:postgres@localhost:54330/postgres` | Postgres 17。Supabase の代わり。データはボリューム `tailor-stream_db-data`（`/var/lib/docker/volumes/tailor-stream_db-data/_data`） |
 
-- `docker compose up` のたびに migrate サービスが `supabase/migrations/*.sql` と `supabase/seed.sql` を開発用 DB（`postgres`）とテスト用 DB（`tailor_stream_test`）に適用し、`tailor_stream_app` にローカル専用のパスワードを設定します（`docker/db/migrate.sh`）。どちらも冪等なので既存のデータは消えません。api は migrate が成功してから起動します。
+- `docker compose up` のたびに migrate サービスが `supabase/migrations/*.sql` と `supabase/seed.sql` を開発用 DB（`postgres`）とテスト用 DB（`tailor_stream_test`）に適用します（`docker/db/migrate.sh`）。api は本番と同じくオーナーロール（`postgres`）で接続します。どちらも冪等なので既存のデータは消えません。api は migrate が成功してから起動します。
 - 起動したままマイグレーションだけ流し直すときは `docker compose run --rm migrate`。
   既存テーブルの定義を変えたときは `docker compose down -v && docker compose up` で DB を作り直します（データは消えます）。
 - 件数確認・期限切れデータの削除・全削除などのメンテナンス用 SQL は `supabase/maintenance/`（使い方は [supabase/maintenance/README.md](supabase/maintenance/README.md)）。
@@ -102,18 +102,14 @@ python3.12 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 
 #### 2. DB の準備
 
-`docker compose up -d db` でローカルの Postgres だけを起動し、`DATABASE_URL=postgresql://tailor_stream_app:tailor_stream_app_local@localhost:54330/postgres` を使うのが簡単です。
+`docker compose up -d db` でローカルの Postgres だけを起動し、`docker compose run --rm migrate` でマイグレーションとシードを適用し、`DATABASE_URL=postgresql://postgres:postgres@localhost:54330/postgres` を使うのが簡単です。
 Supabase のプロジェクトを使う場合は、マイグレーションとシードを適用します。
 
 ```bash
 psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/init.sql -f supabase/seed.sql
 ```
 
-アプリ用ロールのログイン権限とパスワードは、リポジトリに秘密を置かないため SQL Editor で手動設定します。
-
-```sql
-alter role tailor_stream_app login password '<ランダムなパスワード>';
-```
+アプリは DB のオーナーロール（`postgres`）で接続します。`DATABASE_URL` には Supabase の Connect 画面にある Transaction pooler（ポート 6543）の接続文字列をそのまま使います。
 
 `tailor_stream` スキーマは Supabase の Exposed schemas に追加しないでください。
 
@@ -188,7 +184,7 @@ npm run lint && npm test && ruff check . && ruff format --check . && mypy backen
 - `APP_BASE_URL` は通常不要です（Vercel が入れる `VERCEL_PROJECT_PRODUCTION_URL` から本番 URL を作ります）。独自ドメインを使うなど本番 URL が別のときだけ設定します。
 - 足りない環境変数があっても起動は止まりません。不足している変数名や無効になった機能は Functions のログに出ます。
 - `EMAIL_PROVIDER=console` は localhost 以外では使われません（ログインリンクをログに出さないため）。
-- `docker/`・`docker-compose.yml` はローカル専用で、`.vercelignore` でアップロード対象から外しています。本番の DB は Supabase（Supavisor の Transaction mode、ポート 6543、ユーザーは `tailor_stream_app`）です。
+- `docker/`・`docker-compose.yml` はローカル専用で、`.vercelignore` でアップロード対象から外しています。本番の DB は Supabase（Supavisor の Transaction mode、ポート 6543、ユーザーはオーナーロールの `postgres`）です。
 
 ### Supabase・Resend を用意する前のデプロイ（モック）
 

@@ -15,7 +15,7 @@ tailor-stream は、ユーザーが選んだカテゴリ（最大3つ）のニ�
 - フロントエンド: Vite + React 19 + Tailwind CSS v4（TypeScript、`src/`）
 - バックエンド: Python 3.12 + FastAPI（`backend/`）。DB 操作・認証・記事取得・決済など責任を伴う処理はすべて Python で行う
 - DB: Supabase を Postgres ホスティングとしてのみ使う（Supabase Auth / Data API / RLS / supabase-js は使わない）。
-  全テーブルは `tailor_stream` スキーマ。アプリは専用ロール `tailor_stream_app` で Supavisor の Transaction mode（6543）に接続する
+  全テーブルは `tailor_stream` スキーマ。アプリは DB のオーナーロール（`postgres`）で Supavisor の Transaction mode（6543）に接続する
 - 環境は dev（ローカルの docker compose）と production（Vercel、`main` のみデプロイ）の2つ。Preview デプロイは使わない
 - ホスティング: Vercel。フロントは静的ビルド、`/api/*` は `api/index.py`（Python Function）にルーティング（`vercel.json`）
 - テスト: フロントは vitest（対象ファイルと同じ場所に `*.test.ts`）、バックエンドは pytest（`tests/`）
@@ -26,7 +26,7 @@ tailor-stream は、ユーザーが選んだカテゴリ（最大3つ）のニ�
 - `backend/config.py`: pydantic-settings で環境変数を読む（必須値が無ければ起動時にエラー）。固定の定数・エラーメッセージもここ
 - `backend/db.py`: psycopg 3。`prepare_threshold=None` を必ず指定し、リクエスト単位で接続する（プールを使う場合も max 2 以下）
 - `backend/models.py`: API の入出力（pydantic）。JSON はキャメルケース
-- `backend/repositories/`: SQL はここだけに書く。ユーザーデータを扱う関数は `user_id` を必須引数にする。
+- `backend/repositories/`: SQL はここだけに書く。テーブルは必ず `tailor_stream.xxx` とスキーマ付きで書く（search_path に頼らない。テストで検証している）。ユーザーデータを扱う関数は `user_id` を必須引数にする。
   `memory.py` は DB を使わないモック実装（`DATA_BACKEND=memory`）。Protocol を変えたらこちらも合わせる
 - `backend/auth/`: マジックリンク認証（トークン・セッション・`get_current_user` / `get_optional_user`・Origin チェック）
 - `backend/email/`: `EmailSender` プロトコル + console（ローカル開発のみ）/ resend / noop（送らないモック）

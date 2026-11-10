@@ -35,7 +35,7 @@ def conn(test_database_url: str) -> Iterator[DbConnection]:
         test_database_url,
         prepare_threshold=None,
         row_factory=dict_row,
-        options="-c search_path=tailor_stream",
+        # search_path は設定しない（SQL がスキーマ付きで書かれていることも検証する）
     ) as connection:
         try:
             yield connection
@@ -79,7 +79,7 @@ def test_取り込んだ記事がフィードに出る(conn: DbConnection) -> No
 
 
 def test_同じストーリーの記事は代表1件だけ返し期限切れは返さない(conn: DbConnection) -> None:
-    conn.execute("insert into story_clusters (id) values ('test-cluster')")
+    conn.execute("insert into tailor_stream.story_clusters (id) values ('test-cluster')")
     articles = PgArticleRepository(conn)
     now = conn.execute("select now() as now").fetchone()
     assert now is not None
@@ -107,7 +107,9 @@ def test_同じストーリーの記事は代表1件だけ返し期限切れは�
         "security",
         [row("t-low", 1.0, 1), row("t-high", 2.0, 1), row("t-solo", 0.5, 1), row("t-old", 9.0, -1)],
     )
-    conn.execute("update articles set cluster_id = 'test-cluster' where id in ('t-low', 't-high')")
+    conn.execute(
+        "update tailor_stream.articles set cluster_id = 'test-cluster' where id in ('t-low', 't-high')"
+    )
 
     feed = articles.list_feed(["security"], 100)
     ids = [a.id for a in feed if a.id.startswith("t-")]

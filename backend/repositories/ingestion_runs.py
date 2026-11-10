@@ -27,7 +27,7 @@ class PgIngestionRunRepository:
     def start(self, provider: str, category_id: str) -> int:
         row = self._conn.execute(
             """
-            insert into ingestion_runs (provider, category_id, status)
+            insert into tailor_stream.ingestion_runs (provider, category_id, status)
             values (%s, %s, 'running')
             returning id
             """,
@@ -48,7 +48,7 @@ class PgIngestionRunRepository:
     ) -> None:
         self._conn.execute(
             """
-            update ingestion_runs
+            update tailor_stream.ingestion_runs
             set status = %s, finished_at = now(), fetched_count = %s, request_units = %s, error = %s
             where id = %s
             """,

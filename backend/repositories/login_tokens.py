@@ -22,14 +22,14 @@ class PgLoginTokenRepository:
 
     def count_recent_by_email(self, email: str, since: datetime) -> int:
         row = self._conn.execute(
-            "select count(*) as n from login_tokens where email = %s and created_at >= %s",
+            "select count(*) as n from tailor_stream.login_tokens where email = %s and created_at >= %s",
             (email, since),
         ).fetchone()
         return int(row["n"]) if row else 0
 
     def count_recent_by_ip(self, ip: str, since: datetime) -> int:
         row = self._conn.execute(
-            "select count(*) as n from login_tokens where request_ip = %s and created_at >= %s",
+            "select count(*) as n from tailor_stream.login_tokens where request_ip = %s and created_at >= %s",
             (ip, since),
         ).fetchone()
         return int(row["n"]) if row else 0
@@ -37,7 +37,7 @@ class PgLoginTokenRepository:
     def create(self, email: str, token_hash: str, expires_at: datetime, ip: str | None) -> None:
         self._conn.execute(
             """
-            insert into login_tokens (email, token_hash, expires_at, request_ip)
+            insert into tailor_stream.login_tokens (email, token_hash, expires_at, request_ip)
             values (%s, %s, %s, %s)
             """,
             (email, token_hash, expires_at, ip),
@@ -46,7 +46,7 @@ class PgLoginTokenRepository:
     def consume(self, token_hash: str) -> str | None:
         row = self._conn.execute(
             """
-            update login_tokens
+            update tailor_stream.login_tokens
             set consumed_at = now()
             where token_hash = %s and consumed_at is null and expires_at > now()
             returning email

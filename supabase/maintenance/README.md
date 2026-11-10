@@ -1,6 +1,6 @@
 # メンテナンス用 SQL
 
-運用・開発中に手で流す SQL。アプリ（`tailor_stream_app`）ではなく、DB のオーナー権限（ローカルは `postgres`、Supabase は SQL Editor か接続文字列の `postgres` ユーザー）で実行する。
+運用・開発中に手で流す SQL。DB のオーナー権限（ローカルは `postgres`、Supabase は SQL Editor か接続文字列の `postgres` ユーザー）で実行する。
 
 | ファイル | 内容 | 確認 |
 | --- | --- | --- |
@@ -10,7 +10,8 @@
 | `truncate_articles.sql` | 記事・ストーリー・AI キャッシュ・取り込み記録を全削除（保存も消える）。カテゴリとユーザーは残す | `-v confirm=yes` |
 | `truncate_users.sql` | 全ユーザーとそのデータ（セッション・選択カテゴリ・保存）とログイントークンを全削除 | `-v confirm=yes` |
 | `truncate_data.sql` | カテゴリ以外の全データを削除（テーブル・関数・トリガーは残す） | `-v confirm=yes` |
-| `drop_schema.sql` | `tailor_stream` スキーマごと削除（ロール `tailor_stream_app` は残す） | `-v confirm=yes` |
+| `drop_schema.sql` | `tailor_stream` スキーマごと削除 | `-v confirm=yes` |
+| `drop_app_role.sql` | 旧構成のアプリ用ロール `tailor_stream_app` を削除（旧版の init.sql を流した DB で一度だけ） | 不要 |
 
 ```bash
 # Supabase（ADMIN_DATABASE_URL はオーナー権限の接続文字列）
