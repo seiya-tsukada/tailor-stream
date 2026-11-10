@@ -5,8 +5,6 @@
 # - 開発用 DB（POSTGRES_DB）とテスト用 DB の両方に supabase/migrations/*.sql（ファイル名順）と
 #   supabase/seed.sql を適用する。どちらも冪等なので、毎回流しても既存のデータは変わらない
 #   （1ファイル = 1トランザクション。失敗したファイルは丸ごと戻る）
-# - アプリ用ロール tailor_stream_app にローカル専用のパスワードでログイン権限を付ける
-#   （本番の Supabase では SQL Editor で手動設定する。README 参照）
 set -eu
 
 MIGRATIONS_DIR=/tailor-stream/migrations
@@ -33,10 +31,5 @@ for db in "$POSTGRES_DB" "$TAILOR_STREAM_TEST_DB"; do
   echo "[migrate] $db <- seed.sql"
   run_psql --dbname "$db" --single-transaction -f "$SEED_FILE"
 done
-
-# ロールはクラスタ共通なので1回だけ設定する
-run_psql --dbname "$POSTGRES_DB" -v app_password="$TAILOR_STREAM_APP_PASSWORD" <<'SQL'
-alter role tailor_stream_app login password :'app_password';
-SQL
 
 echo "[migrate] 完了"

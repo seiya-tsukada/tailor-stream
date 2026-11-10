@@ -18,7 +18,7 @@ class PgCategoryRepository:
         rows = self._conn.execute(
             """
             select id, name_ja, name_en, description, sort_order, is_active
-            from categories
+            from tailor_stream.categories
             where is_active
             order by sort_order, id
             """
@@ -29,7 +29,7 @@ class PgCategoryRepository:
         row = self._conn.execute(
             """
             select id, name_ja, name_en, description, sort_order, is_active
-            from categories
+            from tailor_stream.categories
             where id = %s and is_active
             """,
             (category_id,),

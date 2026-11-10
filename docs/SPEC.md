@@ -55,7 +55,7 @@
 ┌───────────────▼────────────┐  ┌──▼─────────────────────────────┐
 │ Frontend: Vite + React 19  │  │ Supabase（Postgres ホスティングのみ）│
 │ （src/、Vercel の静的配信）  │  │ tailor_stream スキーマ             │
-│ 型は OpenAPI から生成       │  │ ロール tailor_stream_app で接続    │
+│ 型は OpenAPI から生成       │  │ オーナーロール（postgres）で接続   │
 └────────────────────────────┘  └────────────────────────────────┘
 ```
 
@@ -69,7 +69,7 @@
 ```
 NEWS_PROVIDER=mock        # mock | google_alerts_rss
 DATA_BACKEND=             # 任意。postgres | memory（未設定なら DATABASE_URL の有無で決める）
-DATABASE_URL=...          # mock 以外は必須。tailor_stream_app で Transaction mode（6543）に接続
+DATABASE_URL=...          # mock 以外は必須。オーナーロール（postgres）で Transaction mode（6543）に接続
 ADMIN_SECRET=...          # mock 以外は必須（16文字以上）。/api/admin/* の Bearer トークン
 GOOGLE_ALERTS_FEEDS={...} # カテゴリ ID → RSS URL（JSON）。未設定のカテゴリはスキップ
 ARTICLE_TTL_HOURS=48      # articles.expires_at = published_at + この時間
@@ -98,7 +98,8 @@ EMAIL_PROVIDER=           # 任意。console（ローカル開発のみ）| rese
 - 運用・開発中に手で流す SQL（件数確認・期限切れ削除・ユーザー削除・全削除など）は `supabase/maintenance/` に置く（使い方は同ディレクトリの README）。
 
 - 全オブジェクトを `tailor_stream` スキーマに置く。このスキーマは Supabase の Exposed schemas に追加しない（Data API から見せない）。
-- アプリは専用ロール `tailor_stream_app` で接続する（search_path・statement_timeout はロールに設定済み。ログイン権限とパスワードは SQL Editor で手動設定し、リポジトリには置かない）。DDL の権限は持たない。
+- アプリは DB のオーナーロール（Supabase の `postgres`）で接続する。search_path に頼らず、SQL ではテーブルを必ず `tailor_stream.xxx` と書く。
+- 保険として、`anon` / `authenticated` / `service_role` からスキーマの権限を外し、全テーブルで RLS をポリシー無しで有効にしている（オーナーは RLS の対象外なのでアプリには影響しない）。
 - テーブル:
   - 共有データ: `categories` / `story_clusters` / `articles` / `article_categories` / `article_ai_cache` / `ingestion_runs`
   - アカウント・認証: `users`（plan もここで持つ）/ `login_tokens` / `sessions`（トークンは SHA-256 のみ保存）

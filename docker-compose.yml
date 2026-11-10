@@ -15,7 +15,6 @@ name: tailor-stream
 x-local-secrets:
   # ローカル専用の値（本番では使わない）
   postgres-password: &postgres-password postgres
-  app-db-password: &app-db-password tailor_stream_app_local
   admin-secret: &admin-secret local-admin-secret-0123456789
 
 services:
@@ -46,7 +45,6 @@ services:
       PGPASSWORD: *postgres-password
       POSTGRES_DB: postgres
       TAILOR_STREAM_TEST_DB: tailor_stream_test
-      TAILOR_STREAM_APP_PASSWORD: *app-db-password
     volumes:
       - ./docker/db/migrate.sh:/tailor-stream/migrate.sh:ro
       - ./supabase/migrations:/tailor-stream/migrations:ro
@@ -65,8 +63,8 @@ services:
       - path: .env
         required: false
     environment:
-      # 本番は Supavisor（6543）経由だが、ローカルは Postgres に直接つなぐ（同じ tailor_stream_app ロール）
-      DATABASE_URL: postgresql://tailor_stream_app:tailor_stream_app_local@db:5432/postgres
+      # 本番は Supavisor（6543）経由だが、ローカルは Postgres に直接つなぐ（本番と同じくオーナーロール）
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/postgres
       ADMIN_SECRET: *admin-secret
       APP_BASE_URL: http://localhost:${WEB_PORT:-5180}
       # 通知（メール）はローカルでは送らない。ログインリンクは api のログに出る

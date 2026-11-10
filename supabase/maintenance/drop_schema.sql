@@ -1,5 +1,4 @@
 -- tailor_stream スキーマごと削除する（テーブル・データ・関数・トリガーすべて）
--- ロール tailor_stream_app は残す（パスワードを手動設定しているため。init.sql を流し直せば権限も戻る）。
 -- 単体でも使えるが、マイグレーションとシードの前に連結すると作り直しになる:
 --
 --   cat supabase/maintenance/drop_schema.sql supabase/migrations/*.sql supabase/seed.sql \

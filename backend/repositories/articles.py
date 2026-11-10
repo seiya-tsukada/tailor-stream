@@ -67,15 +67,15 @@ class PgArticleRepository:
                 a.language, a.image_url, a.published_at, a.popularity_score, a.cluster_id,
                 array(
                   select ac.category_id
-                  from article_categories ac
+                  from tailor_stream.article_categories ac
                   where ac.article_id = a.id and ac.category_id = any(%(category_ids)s)
                   order by ac.category_id
                 ) as category_ids
-              from articles a
+              from tailor_stream.articles a
               where a.expires_at > now()
                 and exists (
                   select 1
-                  from article_categories ac
+                  from tailor_stream.article_categories ac
                   where ac.article_id = a.id and ac.category_id = any(%(category_ids)s)
                 )
               order by coalesce(a.cluster_id, a.id), a.popularity_score desc, a.published_at desc
@@ -94,7 +94,7 @@ class PgArticleRepository:
         with self._conn.transaction(), self._conn.cursor() as cur:
             cur.executemany(
                 """
-                insert into articles (
+                insert into tailor_stream.articles (
                   id, provider, provider_article_id, canonical_url, title, snippet,
                   source_name, source_domain, language, region, image_url, published_at,
                   share_count, popularity_score, expires_at
@@ -121,7 +121,7 @@ class PgArticleRepository:
             )
             cur.executemany(
                 """
-                insert into article_categories (article_id, category_id)
+                insert into tailor_stream.article_categories (article_id, category_id)
                 values (%s, %s)
                 on conflict do nothing
                 """,
