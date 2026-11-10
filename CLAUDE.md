@@ -75,7 +75,7 @@ tailor-stream は、ユーザーが選んだカテゴリ（最大3つ）のニ�
 
 ## ローカル開発
 
-- `docker compose up --build` で db（Postgres。Supabase の代わり。データはボリューム `tailor-stream_db-data`）・api・frontend（http://localhost:5180）をまとめて起動できる。
+- `docker compose up --build` で db（Postgres。Supabase の代わり。データはボリューム `tailor-stream_db-data`）・migrate（起動のたびにマイグレーションとシードを適用。冪等）・api・frontend（http://localhost:5180）をまとめて起動できる。
   メールは console 固定で送らない。`docker-compose.yml` と `docker/` はローカル専用（`.vercelignore` で除外）
 - Docker を使わない場合は `uvicorn backend.app:app --reload --port 8000` と `npm run dev`（Vite）を並行起動する。Vite が `/api` を `http://127.0.0.1:8000` に転送する
 - 環境変数はリポジトリ直下の `.env`（gitignore 済み）から読む。項目を増やしたら `.env.example` も更新する

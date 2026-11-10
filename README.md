@@ -74,8 +74,8 @@ docker compose up --build
 | api | http://localhost:8000/api/docs | FastAPI（`--reload`） |
 | db | `postgresql://postgres:postgres@localhost:54330/postgres` | Postgres 17。Supabase の代わり。データはボリューム `tailor-stream_db-data`（`/var/lib/docker/volumes/tailor-stream_db-data/_data`） |
 
-- DB は初回起動時に `supabase/migrations/*.sql` と `supabase/seed.sql` を開発用 DB（`postgres`）とテスト用 DB（`tailor_stream_test`）に適用し、`tailor_stream_app` にローカル専用のパスワードを設定します（`docker/db/init.sh`）。
-- マイグレーションとシードは冪等なので、追加した分は既存の DB にそのまま流せます: `docker compose exec db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f /tailor-stream/migrations/init.sql`（テスト用 DB は `-d tailor_stream_test`）。
+- `docker compose up` のたびに migrate サービスが `supabase/migrations/*.sql` と `supabase/seed.sql` を開発用 DB（`postgres`）とテスト用 DB（`tailor_stream_test`）に適用し、`tailor_stream_app` にローカル専用のパスワードを設定します（`docker/db/migrate.sh`）。どちらも冪等なので既存のデータは消えません。api は migrate が成功してから起動します。
+- 起動したままマイグレーションだけ流し直すときは `docker compose run --rm migrate`。
   既存テーブルの定義を変えたときは `docker compose down -v && docker compose up` で DB を作り直します（データは消えます）。
 - 件数確認・期限切れデータの削除・全削除などのメンテナンス用 SQL は `supabase/maintenance/`（使い方は [supabase/maintenance/README.md](supabase/maintenance/README.md)）。
 - ヘルスチェック: `curl http://localhost:8000/api/health`（DB に `select 1` を流し、つながらなければ 503）
