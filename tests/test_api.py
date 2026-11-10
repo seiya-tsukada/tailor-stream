@@ -11,6 +11,7 @@ from tests.conftest import ADMIN_SECRET
 from tests.fakes import (
     FIXED_NOW,
     FakeArticleRepository,
+    FakeHealthRepository,
     FakeIngestionRunRepository,
     FakeNewsProvider,
     fetched,
@@ -36,10 +37,27 @@ def feed_article(article_id: str, score: float) -> FeedArticle:
     )
 
 
-def test_health(client: TestClient) -> None:
+def test_healthはDBにselect_1で疎通を確認する(
+    client: TestClient, health_repo: FakeHealthRepository
+) -> None:
     response = client.get("/api/health")
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["database"] == "ok"
+    assert health_repo.ping_count == 1
+
+
+def test_healthはDBにつながらなければ503(
+    client: TestClient, health_repo: FakeHealthRepository, caplog: pytest.LogCaptureFixture
+) -> None:
+    health_repo.fail = True
+    response = client.get("/api/health")
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "error"
+    assert body["database"] == "error"
+    assert "ヘルスチェック" in caplog.text
 
 
 def test_categoriesはアクティブなカテゴリをキャメルケースで返す(client: TestClient) -> None:

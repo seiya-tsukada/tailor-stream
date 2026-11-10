@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+import psycopg
+
 from backend.email.sender import EmailMessage
 from backend.feed.categories import SEED_CATEGORIES, Category
 from backend.feed.provider import FetchedArticle, FetchResult
@@ -19,6 +21,17 @@ from backend.repositories.user_categories import (
 from backend.repositories.users import User
 
 FIXED_NOW = datetime(2026, 10, 26, 12, 0, tzinfo=UTC)
+
+
+class FakeHealthRepository:
+    def __init__(self) -> None:
+        self.fail = False
+        self.ping_count = 0
+
+    def ping(self) -> None:
+        self.ping_count += 1
+        if self.fail:
+            raise psycopg.OperationalError("connection refused")
 
 
 class FakeCategoryRepository:

@@ -18,6 +18,7 @@ from backend.feed.provider import NewsProvider
 from backend.ingestion.service import IngestionService
 from backend.repositories.articles import ArticleRepository, PgArticleRepository
 from backend.repositories.categories import CategoryRepository, PgCategoryRepository
+from backend.repositories.health import HealthRepository, PgHealthRepository
 from backend.repositories.ingestion_runs import IngestionRunRepository, PgIngestionRunRepository
 from backend.repositories.login_tokens import LoginTokenRepository, PgLoginTokenRepository
 from backend.repositories.memory import MemoryStore
@@ -66,6 +67,13 @@ def get_optional_connection(settings: SettingsDep) -> Iterator[DbConnection | No
 
 
 ConnectionDep = Annotated[DbConnection | None, Depends(get_optional_connection)]
+
+
+def get_health_repository(settings: SettingsDep) -> HealthRepository | None:
+    """DATA_BACKEND=memory なら None（DB を使っていないので疎通確認はしない）"""
+    if settings.effective_data_backend == "memory":
+        return None
+    return PgHealthRepository(settings)
 
 
 def get_category_repository(settings: SettingsDep, conn: ConnectionDep) -> CategoryRepository:
@@ -133,6 +141,7 @@ def require_admin(
         raise AppError(401, ErrorCode.UNAUTHORIZED)
 
 
+HealthRepositoryDep = Annotated[HealthRepository | None, Depends(get_health_repository)]
 CategoryRepositoryDep = Annotated[CategoryRepository, Depends(get_category_repository)]
 ArticleRepositoryDep = Annotated[ArticleRepository, Depends(get_article_repository)]
 IngestionRunRepositoryDep = Annotated[IngestionRunRepository, Depends(get_ingestion_run_repository)]

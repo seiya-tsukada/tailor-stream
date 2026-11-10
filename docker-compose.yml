@@ -32,6 +32,8 @@ services:
       - ./docker/db/init.sh:/docker-entrypoint-initdb.d/10-tailor-stream.sh:ro
       - ./supabase/migrations:/tailor-stream/migrations:ro
       - ./supabase/seed.sql:/tailor-stream/seed.sql:ro
+      # メンテナンス用 SQL（docker compose exec db psql ... -f /tailor-stream/maintenance/xxx.sql）
+      - ./supabase/maintenance:/tailor-stream/maintenance:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d postgres"]
       interval: 2s

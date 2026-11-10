@@ -20,8 +20,13 @@ class CamelModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, from_attributes=True)
 
 
+# DB の疎通: ok / error（select 1 が失敗）/ skipped（DATA_BACKEND=memory で DB を使っていない）
+DatabaseHealth = Literal["ok", "error", "skipped"]
+
+
 class HealthResponse(CamelModel):
-    status: Literal["ok"]
+    status: Literal["ok", "error"]
+    database: DatabaseHealth
     timestamp: datetime
 
 

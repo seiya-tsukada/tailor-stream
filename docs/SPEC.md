@@ -92,7 +92,10 @@ EMAIL_PROVIDER=           # 任意。console（ローカル開発のみ）| rese
 
 ## 4. データモデル（Supabase / PostgreSQL）
 
-スキーマ定義の正は `supabase/migrations/20261027000000_tailor_stream_schema.sql`。仕様書には要点だけを書く。
+スキーマ定義の正は `supabase/migrations/init.sql`。仕様書には要点だけを書く。
+
+- マイグレーションは冪等（無いときだけ作る / 置き換える）。適用済みの DB に何度流しても変化しない。`supabase db push` は使わず psql で流すので、ファイル名に日付は付けない。
+- 運用・開発中に手で流す SQL（件数確認・期限切れ削除・ユーザー削除・全削除など）は `supabase/maintenance/` に置く（使い方は同ディレクトリの README）。
 
 - 全オブジェクトを `tailor_stream` スキーマに置く。このスキーマは Supabase の Exposed schemas に追加しない（Data API から見せない）。
 - アプリは専用ロール `tailor_stream_app` で接続する（search_path・statement_timeout はロールに設定済み。ログイン権限とパスワードは SQL Editor で手動設定し、リポジトリには置かない）。DDL の権限は持たない。

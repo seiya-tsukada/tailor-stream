@@ -33,7 +33,8 @@
 │   ├── components/ hooks/ services/ utils/ config/
 │   └── App.tsx
 ├── supabase/
-│   ├── migrations/           # スキーマ定義（正）
+│   ├── migrations/           # スキーマ定義（正。冪等な init.sql）
+│   ├── maintenance/          # 手で流すメンテナンス用 SQL
 │   └── seed.sql              # カテゴリのシード
 ├── pyproject.toml            # Python の依存・ruff・mypy・pytest の設定
 ├── requirements.txt          # Vercel 用（pyproject と一致させる）
@@ -74,7 +75,10 @@ docker compose up --build
 | db | `postgresql://postgres:postgres@localhost:54330/postgres` | Postgres 17。Supabase の代わり。データはボリューム `tailor-stream_db-data`（`/var/lib/docker/volumes/tailor-stream_db-data/_data`） |
 
 - DB は初回起動時に `supabase/migrations/*.sql` と `supabase/seed.sql` を開発用 DB（`postgres`）とテスト用 DB（`tailor_stream_test`）に適用し、`tailor_stream_app` にローカル専用のパスワードを設定します（`docker/db/init.sh`）。
-- マイグレーションを追加・変更したら `docker compose down -v && docker compose up` で DB を作り直します（データは消えます）。
+- マイグレーションとシードは冪等なので、追加した分は既存の DB にそのまま流せます: `docker compose exec db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f /tailor-stream/migrations/init.sql`（テスト用 DB は `-d tailor_stream_test`）。
+  既存テーブルの定義を変えたときは `docker compose down -v && docker compose up` で DB を作り直します（データは消えます）。
+- 件数確認・期限切れデータの削除・全削除などのメンテナンス用 SQL は `supabase/maintenance/`（使い方は [supabase/maintenance/README.md](supabase/maintenance/README.md)）。
+- ヘルスチェック: `curl http://localhost:8000/api/health`（DB に `select 1` を流し、つながらなければ 503）
 - メールは送りません（`EMAIL_PROVIDER=console` 固定）。ログインリンクは `docker compose logs -f api` に出るので、それをブラウザで開きます。
 - 記事の取り込み: `curl -X POST http://localhost:8000/api/admin/ingest -H "Authorization: Bearer local-admin-secret-0123456789"`
 - 実 DB テスト: `TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:54330/tailor_stream_test pytest`
@@ -102,7 +106,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 Supabase のプロジェクトを使う場合は、マイグレーションとシードを適用します。
 
 ```bash
-psql "$ADMIN_DATABASE_URL" -f supabase/migrations/20261027000000_tailor_stream_schema.sql -f supabase/seed.sql
+psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/init.sql -f supabase/seed.sql
 ```
 
 アプリ用ロールのログイン権限とパスワードは、リポジトリに秘密を置かないため SQL Editor で手動設定します。

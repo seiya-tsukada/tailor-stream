@@ -14,6 +14,7 @@ from tests.fakes import (
     FakeCategoryRepository,
     FakeClock,
     FakeEmailSender,
+    FakeHealthRepository,
     FakeIngestionRunRepository,
     FakeLoginTokenRepository,
     FakeNewsProvider,
@@ -34,6 +35,11 @@ def settings() -> Settings:
         app_base_url=APP_BASE_URL,
         _env_file=None,  # type: ignore[call-arg]
     )
+
+
+@pytest.fixture
+def health_repo() -> FakeHealthRepository:
+    return FakeHealthRepository()
 
 
 @pytest.fixture
@@ -89,6 +95,7 @@ def email_sender() -> FakeEmailSender:
 @pytest.fixture
 def client(
     settings: Settings,
+    health_repo: FakeHealthRepository,
     category_repo: FakeCategoryRepository,
     article_repo: FakeArticleRepository,
     run_repo: FakeIngestionRunRepository,
@@ -106,6 +113,7 @@ def client(
     app = create_app()
     overrides = {
         get_settings: lambda: settings,
+        deps.get_health_repository: lambda: health_repo,
         deps.get_category_repository: lambda: category_repo,
         deps.get_article_repository: lambda: article_repo,
         deps.get_ingestion_run_repository: lambda: run_repo,

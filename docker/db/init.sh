@@ -2,7 +2,7 @@
 # ローカル開発用 DB の初期化（docker compose の db コンテナが初回起動時に1回だけ実行する）
 #
 # - 開発用 DB（POSTGRES_DB）とテスト用 DB（TAILOR_STREAM_TEST_DB）の両方に
-#   supabase/migrations/*.sql（ファイル名順）と supabase/seed.sql を適用する
+#   supabase/migrations/*.sql（ファイル名順）と supabase/seed.sql を適用する（どちらも冪等なので、後から流し直しても安全）
 # - アプリ用ロール tailor_stream_app にローカル専用のパスワードでログイン権限を付ける
 #   （本番の Supabase では SQL Editor で手動設定する。README 参照）
 set -eu

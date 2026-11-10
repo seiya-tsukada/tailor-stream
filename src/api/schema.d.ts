@@ -11,7 +11,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Health */
+        /**
+         * Health
+         * @description 死活監視。DB は select 1 で疎通を確認する（DATA_BACKEND=memory なら確認しない）
+         */
         get: operations["health_api_health_get"];
         put?: never;
         post?: never;
@@ -244,9 +247,14 @@ export interface components {
         HealthResponse: {
             /**
              * Status
-             * @constant
+             * @enum {string}
              */
-            status: "ok";
+            status: "ok" | "error";
+            /**
+             * Database
+             * @enum {string}
+             */
+            database: "ok" | "error" | "skipped";
             /**
              * Timestamp
              * Format: date-time
@@ -370,6 +378,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description DB に接続できない */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthResponse"];
                 };
             };
         };
