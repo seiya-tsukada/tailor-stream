@@ -93,6 +93,11 @@ def memory_client(email_sender: FakeEmailSender) -> Iterator[TestClient]:
 
 
 class TestMemoryBackend:
+    def test_healthはDBを確認しない(self, memory_client: TestClient) -> None:
+        response = memory_client.get("/api/health")
+        assert response.status_code == 200
+        assert response.json()["database"] == "skipped"
+
     def test_カテゴリ一覧を返す(self, memory_client: TestClient) -> None:
         response = memory_client.get("/api/categories")
         assert response.status_code == 200

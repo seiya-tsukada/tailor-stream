@@ -11,11 +11,13 @@ import pytest
 from psycopg import Connection
 from psycopg.rows import dict_row
 
+from backend.config import Settings
 from backend.db import DbConnection
 from backend.feed.mock_provider import MockNewsProvider
 from backend.ingestion.service import IngestionService
 from backend.repositories.articles import ArticleUpsert, PgArticleRepository
 from backend.repositories.categories import PgCategoryRepository
+from backend.repositories.health import PgHealthRepository
 from backend.repositories.ingestion_runs import PgIngestionRunRepository
 from backend.repositories.login_tokens import PgLoginTokenRepository
 from backend.repositories.sessions import PgSessionRepository
@@ -39,6 +41,15 @@ def conn(test_database_url: str) -> Iterator[DbConnection]:
             yield connection
         finally:
             connection.rollback()
+
+
+def test_ヘルスチェックはselect_1で疎通を確認する(test_database_url: str) -> None:
+    settings = Settings(
+        database_url=test_database_url,
+        admin_secret="test-admin-secret-0123456789",
+        _env_file=None,  # type: ignore[call-arg]
+    )
+    PgHealthRepository(settings).ping()
 
 
 def test_アクティブなカテゴリをsort_order順に返す(conn: DbConnection) -> None:

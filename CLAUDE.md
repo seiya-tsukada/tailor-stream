@@ -6,7 +6,8 @@ tailor-stream は、ユーザーが選んだカテゴリ（最大3つ）のニ�
 旧 Google アラートリーダー（AlertPulse）から公開版 MVP へ作り変えている途中。
 
 - 仕様の正は `docs/SPEC.md`。このファイルや README と食い違う場合は SPEC.md に従う。
-- DB スキーマの正は `supabase/migrations/20261027000000_tailor_stream_schema.sql`。
+- DB スキーマの正は `supabase/migrations/init.sql`。マイグレーションは冪等に書く（`if not exists` / `create or replace` / 存在チェック）。
+  `supabase db push` は使わないのでファイル名に日付を付けない。メンテナンス用 SQL は `supabase/maintenance/`
 - 作業は PR 単位で進める（1PR＝1ブランチ）。PR の動作確認はローカルの `docker compose up --build` で行う（README の「開発フロー」）。
 
 ## 技術スタック
