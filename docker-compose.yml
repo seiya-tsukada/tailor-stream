@@ -1,7 +1,9 @@
 # ローカル開発用（docker compose up）。本番（Vercel + Supabase）では使わない
 #
-# - db:       Supabase の代わりのローカル Postgres。初回起動時に supabase/migrations と seed.sql を適用する
+# - db:       Supabase の代わりのローカル Postgres
 #             データは名前付きボリューム tailor-stream_db-data（/var/lib/docker/volumes/tailor-stream_db-data/_data）に置く
+# - migrate:  起動のたびに supabase/migrations と seed.sql を開発用 DB・テスト用 DB に適用して終了する（冪等）。
+#             api は migrate が成功してから起動する。マイグレーションだけ流し直すなら docker compose run --rm migrate
 # - api:      FastAPI（uvicorn --reload）。メール送信は console 固定（ログインリンクはログに出る）
 # - frontend: Vite。/api を api サービスに転送する
 #
@@ -23,15 +25,10 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: *postgres-password
       POSTGRES_DB: postgres
-      TAILOR_STREAM_TEST_DB: tailor_stream_test
-      TAILOR_STREAM_APP_PASSWORD: *app-db-password
     ports:
       - "127.0.0.1:${DB_PORT:-54330}:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
-      - ./docker/db/init.sh:/docker-entrypoint-initdb.d/10-tailor-stream.sh:ro
-      - ./supabase/migrations:/tailor-stream/migrations:ro
-      - ./supabase/seed.sql:/tailor-stream/seed.sql:ro
       # メンテナンス用 SQL（docker compose exec db psql ... -f /tailor-stream/maintenance/xxx.sql）
       - ./supabase/maintenance:/tailor-stream/maintenance:ro
     healthcheck:
@@ -39,6 +36,25 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+
+  migrate:
+    image: postgres:17-alpine
+    entrypoint: ["/tailor-stream/migrate.sh"]
+    environment:
+      PGHOST: db
+      PGUSER: postgres
+      PGPASSWORD: *postgres-password
+      POSTGRES_DB: postgres
+      TAILOR_STREAM_TEST_DB: tailor_stream_test
+      TAILOR_STREAM_APP_PASSWORD: *app-db-password
+    volumes:
+      - ./docker/db/migrate.sh:/tailor-stream/migrate.sh:ro
+      - ./supabase/migrations:/tailor-stream/migrations:ro
+      - ./supabase/seed.sql:/tailor-stream/seed.sql:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
 
   api:
     build:
@@ -62,8 +78,8 @@ services:
       - ./backend:/app/backend
       - ./api:/app/api
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   frontend:
     build:
